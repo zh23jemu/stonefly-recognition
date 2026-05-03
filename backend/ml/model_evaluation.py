@@ -72,23 +72,6 @@ class ModelEvaluator:
                 np.mean([y_test[i] in top_3[i] for i in range(len(y_test))])
             )
 
-        unknown_index = None
-        if self.preprocessor is not None:
-            classes = self.preprocessor.target_encoder.classes_
-            unknown_matches = np.where(classes == "Unknown Stonefly")[0]
-            if len(unknown_matches) > 0:
-                unknown_index = int(unknown_matches[0])
-
-        unknown_prediction_rate = None
-        known_only_accuracy = None
-        if unknown_index is not None:
-            unknown_prediction_rate = float(np.mean(y_pred == unknown_index))
-            known_mask = y_test != unknown_index
-            if np.any(known_mask):
-                known_only_accuracy = float(
-                    np.mean(y_pred[known_mask] == y_test[known_mask])
-                )
-
         results = {
             "accuracy": float(accuracy),
             "balanced_accuracy": float(balanced_accuracy),
@@ -97,8 +80,6 @@ class ModelEvaluator:
             "f1_score": float(f1),
             "macro_f1": float(macro_f1),
             "top_3_accuracy": top_3_accuracy,
-            "unknown_prediction_rate": unknown_prediction_rate,
-            "known_only_accuracy": known_only_accuracy,
             "classification_report": report,
             "confusion_matrix": cm.tolist(),
         }
@@ -112,10 +93,6 @@ class ModelEvaluator:
         print(f"  Macro F1:  {macro_f1:.4f}")
         if top_3_accuracy is not None:
             print(f"  Top-3 Accuracy:  {top_3_accuracy:.4f}")
-        if unknown_prediction_rate is not None:
-            print(f"  Unknown Prediction Rate: {unknown_prediction_rate:.4f}")
-        if known_only_accuracy is not None:
-            print(f"  Known-only Accuracy: {known_only_accuracy:.4f}")
 
         return results, y_pred, y_pred_proba
 
@@ -166,8 +143,6 @@ class ModelEvaluator:
                 "f1_score": results["f1_score"],
                 "macro_f1": results["macro_f1"],
                 "top_3_accuracy": results["top_3_accuracy"],
-                "unknown_prediction_rate": results["unknown_prediction_rate"],
-                "known_only_accuracy": results["known_only_accuracy"],
             }
 
         comparison_df = pd.DataFrame(comparison).T
@@ -221,6 +196,10 @@ class ModelEvaluator:
             "metric_used": metric,
             "all_results": self.evaluation_results,
         }
+        split_meta_path = os.path.join(self.models_dir, "dataset_split_metadata.json")
+        if os.path.exists(split_meta_path):
+            with open(split_meta_path, "r", encoding="utf-8") as f:
+                summary["dataset"] = json.load(f)
 
         summary_path = os.path.join(self.models_dir, "model_evaluation_report.json")
         with open(summary_path, "w", encoding="utf-8") as f:

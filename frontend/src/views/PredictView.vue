@@ -1,134 +1,153 @@
 <template>
   <div class="predict">
     <el-row :gutter="20">
-      <el-col :span="12">
-        <el-card>
+      <el-col :xs="24" :lg="11">
+        <el-card class="panel-card">
           <template #header>
             <div class="card-header">
-              <el-icon><Edit /></el-icon>
-              <span>石蝇特征输入</span>
+              <el-icon><List /></el-icon>
+              <span>验证集样本选择</span>
             </div>
           </template>
-          <el-form :model="formData" label-position="top" :rules="rules" ref="formRef">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="纬度 (Latitude)" prop="lat">
-                  <el-input-number v-model="formData.lat" :min="-90" :max="90" :precision="6" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="经度 (Longitude)" prop="lon">
-                  <el-input-number v-model="formData.lon" :min="-180" :max="180" :precision="6" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
 
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="国家" prop="country">
-                  <el-select v-model="formData.country" placeholder="请选择国家" style="width: 100%">
-                    <el-option label="美国 (US)" value="US" />
-                    <el-option label="新西兰 (NZ)" value="NZ" />
-                    <el-option label="加拿大 (CA)" value="CA" />
-                    <el-option label="德国 (DE)" value="DE" />
-                    <el-option label="荷兰 (NL)" value="NL" />
-                    <el-option label="西班牙 (ES)" value="ES" />
-                    <el-option label="法国 (FR)" value="FR" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="科 (Family)" prop="family">
-                  <el-select v-model="formData.family" placeholder="请选择科" style="width: 100%">
-                    <el-option label="Perlidae" value="Perlidae" />
-                    <el-option label="Austroperlidae" value="Austroperlidae" />
-                    <el-option label="Pteronarcyidae" value="Pteronarcyidae" />
-                    <el-option label="Capniidae" value="Capniidae" />
-                    <el-option label="Leuctridae" value="Leuctridae" />
-                    <el-option label="Taeniopterygidae" value="Taeniopterygidae" />
-                    <el-option label="Nemouridae" value="Nemouridae" />
-                    <el-option label="Eustheniidae" value="Eustheniidae" />
-                    <el-option label="Gripopterygidae" value="Gripopterygidae" />
-                    <el-option label="Perlodidae" value="Perlodidae" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
+          <div class="filters">
+            <el-input
+              v-model="keyword"
+              clearable
+              placeholder="搜索物种、国家或科"
+              @keyup.enter="loadSamples(1)"
+              @clear="loadSamples(1)"
+            />
+            <el-select
+              v-model="speciesFilter"
+              clearable
+              filterable
+              placeholder="按真实物种筛选"
+              @change="loadSamples(1)"
+            >
+              <el-option
+                v-for="item in speciesOptions"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+            <el-button type="primary" :loading="sampleLoading" @click="loadSamples(1)">
+              <el-icon><Search /></el-icon>
+              查询
+            </el-button>
+          </div>
 
-            <el-form-item label="体长 (mm)" prop="body_length_mm">
-              <el-slider v-model="formData.body_length_mm" :min="0" :max="50" :step="0.1" show-input />
-            </el-form-item>
+          <el-table
+            v-loading="sampleLoading"
+            :data="samples"
+            border
+            highlight-current-row
+            class="sample-table"
+            @row-click="selectSample"
+          >
+            <el-table-column prop="species" label="真实物种" min-width="180" show-overflow-tooltip />
+            <el-table-column label="国家" width="80">
+              <template #default="{ row }">{{ row.features.country }}</template>
+            </el-table-column>
+            <el-table-column label="科" min-width="130" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.features.family }}</template>
+            </el-table-column>
+            <el-table-column label="体长" width="90">
+              <template #default="{ row }">
+                {{ Number(row.features.body_length_mm).toFixed(1) }} mm
+              </template>
+            </el-table-column>
+          </el-table>
 
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="颜色" prop="color">
-                  <el-select v-model="formData.color" placeholder="请选择颜色" style="width: 100%">
-                    <el-option label="棕色 (Brown)" value="brown" />
-                    <el-option label="深褐色 (Dark)" value="dark" />
-                    <el-option label="黄色 (Yellow)" value="yellow" />
-                    <el-option label="黑色 (Black)" value="black" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="头部特征" prop="head_feature">
-                  <el-select v-model="formData.head_feature" placeholder="请选择头部特征" style="width: 100%">
-                    <el-option label="小触角 (Small antenna)" value="small antenna" />
-                    <el-option label="圆形 (Rounded)" value="rounded" />
-                    <el-option label="大眼睛 (Large eye)" value="large eye" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <el-form-item>
-              <el-button type="primary" @click="submitPrediction" :loading="loading" size="large" style="width: 100%">
-                <el-icon><Search /></el-icon>
-                开始分类预测
-              </el-button>
-            </el-form-item>
-          </el-form>
+          <div class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="page"
+              v-model:page-size="pageSize"
+              layout="prev, pager, next, sizes, total"
+              :page-sizes="[5, 10, 20, 50]"
+              :total="total"
+              @current-change="loadSamples"
+              @size-change="handleSizeChange"
+            />
+          </div>
         </el-card>
       </el-col>
 
-      <el-col :span="12">
-        <el-card v-if="predictionResult" class="result-card">
+      <el-col :xs="24" :lg="13">
+        <el-card class="panel-card result-card">
           <template #header>
             <div class="card-header">
               <el-icon><Check /></el-icon>
-              <span>分类结果</span>
+              <span>四模型预测对比</span>
             </div>
           </template>
-          <div class="result-content">
-            <div class="prediction-main">
-              <h2>{{ predictionResult.prediction }}</h2>
-              <el-progress 
-                :percentage="Math.round(predictionResult.confidence * 100)" 
-                :color="getProgressColor(predictionResult.confidence)"
-                :stroke-width="20"
-                status="success"
-              />
-              <p class="confidence-text">置信度: {{ (predictionResult.confidence * 100).toFixed(2) }}%</p>
-            </div>
-            
-            <el-divider />
-            
-            <div class="top-predictions">
-              <h4>Top 3 预测结果</h4>
-              <el-table :data="predictionResult.top_3_predictions" style="width: 100%">
-                <el-table-column prop="species" label="石蝇种类" />
-                <el-table-column prop="probability" label="概率">
-                  <template #default="{ row }">
-                    <el-progress :percentage="Math.round(row.probability * 100)" />
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-          </div>
-        </el-card>
 
-        <el-card v-else class="empty-card">
-          <el-empty description="请输入特征数据并点击预测按钮" />
+          <template v-if="selectedSample">
+            <div class="sample-summary">
+              <div>
+                <span class="summary-label">真实物种</span>
+                <strong>{{ selectedSample.species }}</strong>
+              </div>
+              <el-tag effect="plain">验证集样本 #{{ selectedSample.id + 1 }}</el-tag>
+            </div>
+
+            <el-descriptions :column="2" border class="feature-summary">
+              <el-descriptions-item label="纬度">{{ selectedSample.features.lat }}</el-descriptions-item>
+              <el-descriptions-item label="经度">{{ selectedSample.features.lon }}</el-descriptions-item>
+              <el-descriptions-item label="国家">{{ selectedSample.features.country }}</el-descriptions-item>
+              <el-descriptions-item label="科">{{ selectedSample.features.family }}</el-descriptions-item>
+              <el-descriptions-item label="体长">
+                {{ Number(selectedSample.features.body_length_mm).toFixed(1) }} mm
+              </el-descriptions-item>
+              <el-descriptions-item label="颜色">{{ selectedSample.features.color }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-button
+              type="primary"
+              :loading="predictionLoading"
+              class="predict-button"
+              @click="submitPrediction"
+            >
+              <el-icon><DataAnalysis /></el-icon>
+              使用四个模型预测
+            </el-button>
+
+            <el-table
+              v-if="predictionResult?.model_predictions?.length"
+              :data="predictionResult.model_predictions"
+              border
+              class="prediction-table"
+            >
+              <el-table-column label="模型" width="150">
+                <template #default="{ row }">{{ formatModelName(row.model) }}</template>
+              </el-table-column>
+              <el-table-column prop="prediction" label="预测物种" min-width="190" show-overflow-tooltip />
+              <el-table-column label="置信度" width="150">
+                <template #default="{ row }">
+                  <el-progress :percentage="Math.round(row.confidence * 100)" />
+                </template>
+              </el-table-column>
+              <el-table-column label="结果" width="90">
+                <template #default="{ row }">
+                  <el-tag :type="row.correct ? 'success' : 'danger'">
+                    {{ row.correct ? '正确' : '错误' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="Top-3" min-width="220">
+                <template #default="{ row }">
+                  <div class="top-list">
+                    <span v-for="item in row.top_3_predictions" :key="`${row.model}-${item.species}`">
+                      {{ item.species }} {{ (item.probability * 100).toFixed(1) }}%
+                    </span>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </template>
+
+          <el-empty v-else description="请选择一条验证集样本" />
         </el-card>
       </el-col>
     </el-row>
@@ -136,63 +155,105 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { predictStonefly } from '../services/api'
+import {
+  getValidationSamples,
+  predictStonefly,
+  type PredictionResponse,
+  type ValidationSample
+} from '../services/api'
 
-const loading = ref(false)
-const predictionResult = ref(null)
-const formRef = ref()
+const samples = ref<ValidationSample[]>([])
+const selectedSample = ref<ValidationSample | null>(null)
+const predictionResult = ref<PredictionResponse | null>(null)
+const speciesOptions = ref<string[]>([])
+const keyword = ref('')
+const speciesFilter = ref('')
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const sampleLoading = ref(false)
+const predictionLoading = ref(false)
 
-const formData = reactive({
-  lat: 30.5,
-  lon: -95.0,
-  country: 'US',
-  family: 'Perlidae',
-  body_length_mm: 15.0,
-  color: 'brown',
-  head_feature: 'small antenna'
-})
-
-const rules = {
-  lat: [{ required: true, message: '请输入纬度', trigger: 'blur' }],
-  lon: [{ required: true, message: '请输入经度', trigger: 'blur' }],
-  country: [{ required: true, message: '请选择国家', trigger: 'change' }],
-  family: [{ required: true, message: '请选择科', trigger: 'change' }],
-  body_length_mm: [{ required: true, message: '请输入体长', trigger: 'blur' }],
-  color: [{ required: true, message: '请选择颜色', trigger: 'change' }],
-  head_feature: [{ required: true, message: '请选择头部特征', trigger: 'change' }]
+const loadSamples = async (targetPage = page.value) => {
+  sampleLoading.value = true
+  page.value = targetPage
+  try {
+    const result = await getValidationSamples({
+      page: page.value,
+      page_size: pageSize.value,
+      keyword: keyword.value,
+      species: speciesFilter.value
+    })
+    if (!result.success) {
+      ElMessage.error(result.error || '验证集样本加载失败')
+      return
+    }
+    samples.value = result.samples
+    total.value = result.total
+    speciesOptions.value = result.species_options
+  } catch (error) {
+    ElMessage.error(`验证集样本加载失败: ${(error as Error).message}`)
+  } finally {
+    sampleLoading.value = false
+  }
 }
 
-const getProgressColor = (confidence: number) => {
-  if (confidence >= 0.8) return '#67C23A'
-  if (confidence >= 0.6) return '#E6A23C'
-  return '#F56C6C'
+const handleSizeChange = (size: number) => {
+  pageSize.value = size
+  loadSamples(1)
+}
+
+const selectSample = (sample: ValidationSample) => {
+  selectedSample.value = sample
+  predictionResult.value = null
 }
 
 const submitPrediction = async () => {
+  if (!selectedSample.value) return
+
+  predictionLoading.value = true
   try {
-    await formRef.value.validate()
-    loading.value = true
-    
-    const result = await predictStonefly(formData)
+    const result = await predictStonefly({
+      ...selectedSample.value.features,
+      species: selectedSample.value.species
+    })
     if (result.success) {
       predictionResult.value = result
-      ElMessage.success('预测成功！')
+      ElMessage.success('四模型预测完成')
     } else {
       ElMessage.error(result.error || '预测失败')
     }
   } catch (error) {
-    ElMessage.error('请求失败: ' + error.message)
+    ElMessage.error(`预测失败: ${(error as Error).message}`)
   } finally {
-    loading.value = false
+    predictionLoading.value = false
   }
 }
+
+const formatModelName = (name: string) => {
+  const modelNames: Record<string, string> = {
+    knn: 'KNN',
+    random_forest: 'Random Forest',
+    svm: 'SVM',
+    xgboost: 'XGBoost'
+  }
+  return modelNames[name] || name
+}
+
+onMounted(() => {
+  loadSamples()
+})
 </script>
 
 <style scoped>
 .predict {
   padding: 20px;
+}
+
+.panel-card {
+  min-height: 620px;
 }
 
 .card-header {
@@ -203,44 +264,67 @@ const submitPrediction = async () => {
   font-weight: bold;
 }
 
-.result-card {
-  min-height: 500px;
+.filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.result-content {
-  padding: 20px 0;
+.sample-table,
+.prediction-table {
+  width: 100%;
 }
 
-.prediction-main {
-  text-align: center;
-  padding: 20px;
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
-.prediction-main h2 {
-  color: #409eff;
-  margin-bottom: 20px;
-  font-size: 28px;
-}
-
-.confidence-text {
-  margin-top: 15px;
-  color: #666;
-  font-size: 16px;
-}
-
-.top-predictions {
-  padding: 20px 0;
-}
-
-.top-predictions h4 {
-  margin-bottom: 15px;
-  color: #333;
-}
-
-.empty-card {
-  min-height: 500px;
+.sample-summary {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-label {
+  display: block;
+  color: #909399;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.feature-summary {
+  margin-bottom: 16px;
+}
+
+.predict-button {
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .result-card {
+    margin-top: 20px;
+  }
+
+  .sample-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

@@ -59,8 +59,8 @@
               </el-col>
               <el-col :span="6">
                 <el-card class="stat-card">
-                  <h3>未知预测占比</h3>
-                  <p class="stat-value">{{ formatPercent(bestModelMetrics.unknown_prediction_rate) }}</p>
+                  <h3>已知物种数</h3>
+                  <p class="stat-value">{{ datasetSummary.class_count }}</p>
                 </el-card>
               </el-col>
             </el-row>
@@ -68,15 +68,15 @@
             <el-row :gutter="20" class="stats-row">
               <el-col :span="6">
                 <el-card class="stat-card">
-                  <h3>已知类准确率</h3>
-                  <p class="stat-value">{{ formatPercent(bestModelMetrics.known_only_accuracy) }}</p>
+                  <h3>验证集样本</h3>
+                  <p class="stat-value">{{ datasetSummary.validation_samples }}</p>
                 </el-card>
               </el-col>
               <el-col :span="18">
                 <el-card class="stat-card">
                   <h3>指标说明</h3>
                   <p class="stat-desc">
-                    宏平均F1和已知类准确率用于评估小类识别能力；未知预测占比越低，模型越倾向输出具体物种。
+                    当前训练流程已过滤 Unknown Stonefly，按 70/15/15 划分训练集、测试集和验证集；预测页使用验证集样本展示四个模型的预测差异。
                   </p>
                 </el-card>
               </el-col>
@@ -120,16 +120,6 @@
               <el-table-column prop="top_3_accuracy" label="Top-3准确率">
                 <template #default="{ row }">
                   <el-progress :percentage="Math.round(row.top_3_accuracy * 100)" />
-                </template>
-              </el-table-column>
-              <el-table-column prop="unknown_prediction_rate" label="未知占比">
-                <template #default="{ row }">
-                  <el-progress :percentage="Math.round(row.unknown_prediction_rate * 100)" />
-                </template>
-              </el-table-column>
-              <el-table-column prop="known_only_accuracy" label="已知类准确率">
-                <template #default="{ row }">
-                  <el-progress :percentage="Math.round(row.known_only_accuracy * 100)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -197,10 +187,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getModelInfo } from '../services/api'
+import { getModelInfo, type ModelInfo, type ModelMetric } from '../services/api'
 import { ElMessage } from 'element-plus'
 
-const modelInfo = ref(null)
+const modelInfo = ref<ModelInfo | null>(null)
 const imageExists = ref({
   model_comparison: false,
   class_distribution: false,
@@ -211,7 +201,7 @@ const imageExists = ref({
 const modelComparisonData = computed(() => {
   if (!modelInfo.value || !modelInfo.value.all_results) return []
   
-  return Object.entries(modelInfo.value.all_results).map(([model, results]) => ({
+  return Object.entries(modelInfo.value.all_results).map(([model, results]: [string, ModelMetric]) => ({
     model: model.toUpperCase(),
     accuracy: results.accuracy,
     balanced_accuracy: results.balanced_accuracy ?? 0,
@@ -219,9 +209,7 @@ const modelComparisonData = computed(() => {
     recall: results.recall,
     f1_score: results.f1_score,
     macro_f1: results.macro_f1 ?? 0,
-    top_3_accuracy: results.top_3_accuracy ?? 0,
-    unknown_prediction_rate: results.unknown_prediction_rate ?? 0,
-    known_only_accuracy: results.known_only_accuracy ?? 0
+    top_3_accuracy: results.top_3_accuracy ?? 0
   }))
 })
 
@@ -230,9 +218,7 @@ const bestModelMetrics = computed(() => {
     return {
       macro_f1: 0,
       balanced_accuracy: 0,
-      top_3_accuracy: 0,
-      unknown_prediction_rate: 0,
-      known_only_accuracy: 0
+      top_3_accuracy: 0
     }
   }
 
@@ -241,9 +227,15 @@ const bestModelMetrics = computed(() => {
   return {
     macro_f1: result.macro_f1 ?? 0,
     balanced_accuracy: result.balanced_accuracy ?? 0,
-    top_3_accuracy: result.top_3_accuracy ?? 0,
-    unknown_prediction_rate: result.unknown_prediction_rate ?? 0,
-    known_only_accuracy: result.known_only_accuracy ?? 0
+    top_3_accuracy: result.top_3_accuracy ?? 0
+  }
+})
+
+const datasetSummary = computed(() => {
+  const dataset = modelInfo.value?.dataset || {}
+  return {
+    class_count: dataset.class_count ?? 0,
+    validation_samples: dataset.validation_samples ?? 0
   }
 })
 
@@ -254,7 +246,7 @@ const formatPercent = (value: number) => {
 const loadModelInfo = async () => {
   try {
     const result = await getModelInfo()
-    if (result.success) {
+    if (result.success && result.data) {
       modelInfo.value = result.data
       checkImages()
     }

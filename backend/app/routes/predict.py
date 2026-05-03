@@ -2,204 +2,210 @@ from flask import Blueprint, request, jsonify
 import joblib
 import numpy as np
 import pandas as pd
-import json
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+import json
 
 predict_bp = Blueprint("predict", __name__)
 
-MODEL_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "saved_models", "best_stonefly_model.pkl"
-)
-PREPROCESSOR_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "saved_models", "preprocessor.pkl"
-)
-LASSO_SELECTOR_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "saved_models", "lasso_selector.pkl"
-)
-STAGE1_MODEL_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "..",
-    "saved_models",
-    "stage1_known_unknown_model.pkl",
-)
-STAGE2_MODEL_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "..",
-    "saved_models",
-    "stage2_known_species_model.pkl",
-)
-TWO_STAGE_META_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "saved_models", "two_stage_metadata.json"
-)
+BASE_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
+MODELS_DIR = os.path.join(BASE_DIR, "saved_models")
+PREPROCESSOR_PATH = os.path.join(MODELS_DIR, "preprocessor.pkl")
+LASSO_SELECTOR_PATH = os.path.join(MODELS_DIR, "lasso_selector.pkl")
+VALIDATION_SAMPLES_PATH = os.path.join(MODELS_DIR, "validation_samples.json")
+
+MODEL_FILES = {
+    "knn": "knn_model.pkl",
+    "random_forest": "random_forest_model.pkl",
+    "svm": "svm_model.pkl",
+    "xgboost": "xgboost_model.pkl",
+}
+
+REQUIRED_COLUMNS = [
+    "lat",
+    "lon",
+    "country",
+    "family",
+    "body_length_mm",
+    "color",
+    "head_feature",
+]
+
+
+def _load_preprocessing_assets():
+    """加载训练后保存的预处理器和LASSO选择器。
+
+    预测接口和验证集样本接口都依赖这些产物。如果用户还没有重新训练，
+    这里会返回明确错误，避免继续使用旧的Unknown两阶段模型。
+    """
+    if not os.path.exists(PREPROCESSOR_PATH):
+        raise FileNotFoundError(
+            "预处理器未找到，请先使用 .venv\\Scripts\\python.exe backend\\train.py 重新训练"
+        )
+
+    preprocessor = joblib.load(PREPROCESSOR_PATH)
+    selector = joblib.load(LASSO_SELECTOR_PATH) if os.path.exists(LASSO_SELECTOR_PATH) else None
+    return preprocessor, selector
+
+
+def _load_models():
+    """加载四个核心分类模型，返回模型字典和缺失模型列表。"""
+    models = {}
+    missing = []
+    for model_name, filename in MODEL_FILES.items():
+        model_path = os.path.join(MODELS_DIR, filename)
+        if os.path.exists(model_path):
+            models[model_name] = joblib.load(model_path)
+        else:
+            missing.append(filename)
+    return models, missing
+
+
+def _prepare_features(data, preprocessor, selector):
+    """把原始特征转换成模型输入特征矩阵。"""
+    input_df = pd.DataFrame([data])
+    missing_columns = [col for col in REQUIRED_COLUMNS if col not in input_df.columns]
+    if missing_columns:
+        raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
+
+    input_df = input_df[REQUIRED_COLUMNS]
+    X_processed = preprocessor.transform(input_df)
+    if selector is not None:
+        X_processed = selector.transform(X_processed)
+    return X_processed
+
+
+def _label_from_encoded(preprocessor, encoded_label):
+    """将模型输出的数字标签转换回石蝇物种名称。"""
+    return preprocessor.target_encoder.inverse_transform([int(encoded_label)])[0]
+
+
+def _top_predictions(model, X_processed, preprocessor, limit=3):
+    """生成单个模型的Top-N预测结果。"""
+    if not hasattr(model, "predict_proba"):
+        prediction = model.predict(X_processed)[0]
+        return [
+            {
+                "species": _label_from_encoded(preprocessor, prediction),
+                "probability": 1.0,
+            }
+        ]
+
+    probabilities = model.predict_proba(X_processed)[0]
+    class_labels = getattr(model, "classes_", np.arange(len(probabilities)))
+    order = np.argsort(probabilities)[::-1][:limit]
+    return [
+        {
+            "species": _label_from_encoded(preprocessor, class_labels[index]),
+            "probability": float(probabilities[index]),
+        }
+        for index in order
+    ]
 
 
 @predict_bp.route("/predict", methods=["POST"])
 def predict():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
+        actual_species = data.get("species") or data.get("actual_species")
 
-        if not os.path.exists(MODEL_PATH):
+        preprocessor, selector = _load_preprocessing_assets()
+        models, missing = _load_models()
+        if missing:
             return jsonify(
-                {"success": False, "error": "模型尚未训练，请先运行 python train.py"}
-            ), 503
-
-        if not os.path.exists(PREPROCESSOR_PATH):
-            return jsonify(
-                {"success": False, "error": "预处理器未找到，请先运行 python train.py"}
-            ), 503
-
-        model = joblib.load(MODEL_PATH)
-        preprocessor = joblib.load(PREPROCESSOR_PATH)
-        stage1_model = (
-            joblib.load(STAGE1_MODEL_PATH)
-            if os.path.exists(STAGE1_MODEL_PATH)
-            else None
-        )
-        stage2_model = (
-            joblib.load(STAGE2_MODEL_PATH)
-            if os.path.exists(STAGE2_MODEL_PATH)
-            else None
-        )
-        two_stage_meta = None
-        if os.path.exists(TWO_STAGE_META_PATH):
-            with open(TWO_STAGE_META_PATH, "r", encoding="utf-8") as f:
-                two_stage_meta = json.load(f)
-
-        # Load LASSO selector if exists
-        selector = None
-        if os.path.exists(LASSO_SELECTOR_PATH):
-            selector = joblib.load(LASSO_SELECTOR_PATH)
-
-        input_df = pd.DataFrame([data])
-
-        required_columns = [
-            "lat",
-            "lon",
-            "country",
-            "family",
-            "body_length_mm",
-            "color",
-            "head_feature",
-        ]
-        for col in required_columns:
-            if col not in input_df.columns:
-                return jsonify({"success": False, "error": f"缺少必要字段: {col}"}), 400
-
-        # Reorder columns to match training order
-        input_df = input_df[required_columns]
-
-        try:
-            X_processed = preprocessor.transform(input_df)
-            # Apply LASSO feature selection if selector exists
-            if selector is not None:
-                X_processed = selector.transform(X_processed)
-        except ValueError as e:
-            if (
-                "y contains previously unseen labels" in str(e)
-                or "unknown category" in str(e).lower()
-            ):
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": "输入包含训练时未见过的类别值，请检查country/family/color/head_feature的值是否有效",
-                    }
-                ), 400
-            raise e
-
-        unknown_label = "Unknown Stonefly"
-        prediction_label = None
-        top_3 = []
-        confidence = 0.0
-        routing_mode = "single_stage"
-
-        if (
-            stage1_model is not None
-            and stage2_model is not None
-            and two_stage_meta is not None
-        ):
-            routing_mode = "two_stage"
-            known_threshold = float(two_stage_meta.get("known_threshold", 0.4))
-            unknown_class_index = int(two_stage_meta.get("unknown_class_index"))
-
-            stage1_proba = stage1_model.predict_proba(X_processed)[0]
-            stage1_classes = stage1_model.classes_
-            known_class_position = int(np.where(stage1_classes == 1)[0][0])
-            known_probability = float(stage1_proba[known_class_position])
-
-            stage2_proba = stage2_model.predict_proba(X_processed)[0]
-            stage2_labels = stage2_model.classes_
-            stage2_order = np.argsort(stage2_proba)[::-1][:3]
-
-            top_3 = [
                 {
-                    "species": preprocessor.target_encoder.inverse_transform(
-                        [int(stage2_labels[idx])]
-                    )[0],
-                    "probability": float(stage2_proba[idx]),
+                    "success": False,
+                    "error": f"模型文件缺失，请先重新训练: {', '.join(missing)}",
                 }
-                for idx in stage2_order
-            ]
+            ), 503
 
-            if known_probability >= known_threshold:
-                best_idx = int(stage2_order[0])
-                pred_class_index = int(stage2_labels[best_idx])
-                prediction_label = preprocessor.target_encoder.inverse_transform(
-                    [pred_class_index]
-                )[0]
-                confidence = float(stage2_proba[best_idx])
-            else:
-                prediction_label = unknown_label
-                confidence = 1.0 - known_probability
-                top_3.insert(
-                    0,
-                    {
-                        "species": unknown_label,
-                        "probability": confidence,
-                    },
-                )
-                top_3 = top_3[:3]
-        else:
-            prediction = model.predict(X_processed)
-            prediction_proba = model.predict_proba(X_processed)
-            prediction_label = preprocessor.target_encoder.inverse_transform(
-                prediction
-            )[0]
-            class_indices = np.argsort(prediction_proba[0])[::-1][:3]
-            for idx in class_indices:
-                class_name = preprocessor.target_encoder.inverse_transform([idx])[0]
-                prob = prediction_proba[0][idx]
-                top_3.append({"species": class_name, "probability": float(prob)})
-            confidence = float(prediction_proba[0][prediction[0]])
-        if confidence >= 0.7:
-            confidence_level = "high"
-        elif confidence >= 0.4:
-            confidence_level = "medium"
-        else:
-            confidence_level = "low"
+        X_processed = _prepare_features(data, preprocessor, selector)
+        model_predictions = []
 
-        should_review = prediction_label == unknown_label or confidence < 0.4
-        fallback_prediction = None
-        if prediction_label == unknown_label and confidence < 0.4:
-            for item in top_3:
-                if item["species"] != unknown_label:
-                    fallback_prediction = item["species"]
-                    break
+        for model_name, model in models.items():
+            top_3 = _top_predictions(model, X_processed, preprocessor)
+            prediction = top_3[0]["species"]
+            confidence = top_3[0]["probability"]
+            model_predictions.append(
+                {
+                    "model": model_name,
+                    "prediction": prediction,
+                    "confidence": confidence,
+                    "top_3_predictions": top_3,
+                    "actual_species": actual_species,
+                    "correct": prediction == actual_species if actual_species else None,
+                }
+            )
 
         return jsonify(
             {
                 "success": True,
-                "prediction": prediction_label,
-                "confidence": confidence,
-                "confidence_level": confidence_level,
-                "should_review": should_review,
-                "fallback_prediction": fallback_prediction,
-                "routing_mode": routing_mode,
-                "top_3_predictions": top_3,
+                "actual_species": actual_species,
+                "model_predictions": model_predictions,
+            }
+        )
+
+    except FileNotFoundError as e:
+        return jsonify({"success": False, "error": str(e)}), 503
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@predict_bp.route("/validation-samples", methods=["GET"])
+def get_validation_samples():
+    try:
+        if not os.path.exists(VALIDATION_SAMPLES_PATH):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "验证集样本尚未生成，请先重新训练模型",
+                }
+            ), 404
+
+        page = max(int(request.args.get("page", 1)), 1)
+        page_size = min(max(int(request.args.get("page_size", 10)), 1), 100)
+        keyword = request.args.get("keyword", "").strip().lower()
+        species = request.args.get("species", "").strip()
+
+        with open(VALIDATION_SAMPLES_PATH, "r", encoding="utf-8") as f:
+            samples = json.load(f)
+
+        species_options = sorted({item.get("species") for item in samples if item.get("species")})
+        if species:
+            samples = [item for item in samples if item.get("species") == species]
+        if keyword:
+            samples = [
+                item
+                for item in samples
+                if keyword in str(item.get("species", "")).lower()
+                or keyword in str(item.get("country", "")).lower()
+                or keyword in str(item.get("family", "")).lower()
+            ]
+
+        total = len(samples)
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_samples = samples[start:end]
+
+        response_samples = []
+        for index, item in enumerate(page_samples, start=start):
+            response_samples.append(
+                {
+                    "id": index,
+                    "species": item.get("species"),
+                    "features": {col: item.get(col) for col in REQUIRED_COLUMNS},
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "species_options": species_options,
+                "samples": response_samples,
             }
         )
 

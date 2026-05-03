@@ -13,7 +13,7 @@ def run_complete_ml_pipeline(
     output_dir="saved_models",
     viz_dir="visualizations",
     cv=5,
-    unknown_cap_ratio=0.2,
+    max_train_samples=20000,
     random_state=42,
 ):
     os.makedirs(output_dir, exist_ok=True)
@@ -37,55 +37,70 @@ def run_complete_ml_pipeline(
     unknown_label = "Unknown Stonefly"
     y_series = pd.Series(df["species"])
     class_counts = y_series.value_counts()
-    valid_classes = class_counts[class_counts >= 50].index
-    mask = y_series.isin(valid_classes)
+    valid_classes = class_counts[
+        (class_counts >= 50) & (class_counts.index != unknown_label)
+    ].index
+    mask = y_series.isin(valid_classes) & (y_series != unknown_label)
     df_filtered = df[mask].copy()
+    removed_unknown_count = int((y_series == unknown_label).sum())
 
-    if unknown_label in df_filtered["species"].values and 0 < unknown_cap_ratio < 1:
-        unknown_mask = df_filtered["species"] == unknown_label
-        unknown_count = int(unknown_mask.sum())
-        known_count = int((~unknown_mask).sum())
-        max_unknown = int(known_count * unknown_cap_ratio / (1 - unknown_cap_ratio))
-        if unknown_count > max_unknown and max_unknown > 0:
-            df_unknown = df_filtered[unknown_mask].sample(
-                n=max_unknown, random_state=random_state
-            )
-            df_known = df_filtered[~unknown_mask]
-            df_filtered = pd.concat([df_known, df_unknown], axis=0).sample(
-                frac=1, random_state=random_state
-            )
-            df_filtered = df_filtered.reset_index(drop=True)
-            actual_unknown_ratio = float(
-                (df_filtered["species"] == unknown_label).mean()
-            )
-            print(
-                f"  [OK] Unknown下采样: {unknown_count} -> {max_unknown}, 当前占比 {actual_unknown_ratio:.2%}"
-            )
+    print(f"  [OK] 已删除Unknown样本数: {removed_unknown_count}")
+    print(f"  [OK] 过滤后样本数: {len(df_filtered)} (保留{len(valid_classes)}个已知类别)")
 
-    print(f"  [OK] 过滤后样本数: {len(df_filtered)} (保留{len(valid_classes)}个类别)")
+    from sklearn.model_selection import StratifiedShuffleSplit
+
+    # 先在原始已知物种数据上做分层划分，之后只用训练集拟合预处理器和特征选择器。
+    y_filtered = df_filtered["species"].to_numpy()
+    split_index = np.arange(len(df_filtered))
+    holdout_splitter = StratifiedShuffleSplit(
+        n_splits=1, test_size=0.30, random_state=random_state
+    )
+    train_idx, holdout_idx = next(holdout_splitter.split(split_index, y_filtered))
+
+    df_train = df_filtered.iloc[train_idx].reset_index(drop=True)
+    df_holdout = df_filtered.iloc[holdout_idx].reset_index(drop=True)
+    y_holdout = df_holdout["species"].to_numpy()
+    validation_splitter = StratifiedShuffleSplit(
+        n_splits=1, test_size=0.50, random_state=random_state
+    )
+    test_idx, validation_idx = next(
+        validation_splitter.split(np.arange(len(df_holdout)), y_holdout)
+    )
+    df_test = df_holdout.iloc[test_idx].reset_index(drop=True)
+    df_validation = df_holdout.iloc[validation_idx].reset_index(drop=True)
 
     preprocessor = DataPreprocessor()
-    X, y, df_clean = preprocessor.preprocess_pipeline(df_filtered)
+    X_train_full, y_train_full, df_train_clean = preprocessor.preprocess_pipeline(
+        df_train
+    )
+    X_test_full, y_test, df_test_clean = preprocessor.transform_pipeline(df_test)
+    X_validation_full, y_validation, df_validation_clean = (
+        preprocessor.transform_pipeline(df_validation)
+    )
     preprocessor.save(os.path.join(output_dir, "preprocessor.pkl"))
-    print(f"  [OK] 处理后样本数: {len(X)}")
-    print(f"  [OK] 处理后特征数: {X.shape[1]}")
+    print(f"  [OK] 训练集样本数: {len(X_train_full)}")
+    print(f"  [OK] 测试集样本数: {len(X_test_full)}")
+    print(f"  [OK] 验证集样本数: {len(X_validation_full)}")
+    print(f"  [OK] 处理后特征数: {X_train_full.shape[1]}")
 
     print("\n【步骤 3/5】特征工程...")
     engineer = FeatureEngineer(viz_dir)
     results, X_pca, pca_model, selector = engineer.perform_feature_engineering(
-        df_clean, X, y
+        df_train_clean, X_train_full, y_train_full
     )
     print(f"  [OK] PCA降维后: {results['pca']['n_components']} 组件")
     print(f"  [OK] LASSO选择特征: {results['lasso']['n_selected']} 个")
 
-    # Apply LASSO feature selection for training
-    X_selected = selector.transform(X)
-    if hasattr(X_selected, "columns"):
-        selected_feature_names = X_selected.columns.tolist()
+    # 使用训练集拟合出的LASSO选择器转换训练、测试和验证数据。
+    X_train_selected = selector.transform(X_train_full)
+    X_test_selected = selector.transform(X_test_full)
+    X_validation_selected = selector.transform(X_validation_full)
+    if hasattr(X_train_selected, "columns"):
+        selected_feature_names = X_train_selected.columns.tolist()
     else:
-        # Get selected feature names from original X
+        # 从训练集原始特征名中取出被LASSO保留的列，便于训练日志和报告说明。
         selected_mask = selector.get_support()
-        selected_feature_names = X.columns[selected_mask].tolist()
+        selected_feature_names = X_train_full.columns[selected_mask].tolist()
 
     print(
         f"  [OK] 使用LASSO选择的 {len(selected_feature_names)} 个特征进行训练: {selected_feature_names}"
@@ -99,37 +114,68 @@ def run_complete_ml_pipeline(
 
     print("\n【步骤 4/5】模型训练...")
     trainer = ModelTrainer(output_dir)
-    X_train, X_test, y_train, y_test = trainer.prepare_data(X_selected, y)
-    unknown_class_index = int(
-        np.where(preprocessor.target_encoder.classes_ == unknown_label)[0][0]
-    )
+    X_train, y_train = X_train_selected, y_train_full
+    if max_train_samples and len(X_train) > max_train_samples:
+        from sklearn.model_selection import StratifiedShuffleSplit
+
+        sampler = StratifiedShuffleSplit(
+            n_splits=1, train_size=max_train_samples, random_state=random_state
+        )
+        sampled_idx, _ = next(sampler.split(np.zeros(len(y_train)), y_train))
+        X_train = (
+            X_train.iloc[sampled_idx]
+            if hasattr(X_train, "iloc")
+            else X_train[sampled_idx]
+        )
+        y_train = np.asarray(y_train)[sampled_idx]
+        print(f"  [OK] 训练集已分层抽样到: {len(X_train)}")
+
     models, results = trainer.train_all_models(X_train, y_train, cv=cv)
-    trainer.train_two_stage_models(
-        X_train, y_train, unknown_class_index=unknown_class_index, known_threshold=0.4
-    )
     trainer.save_models()
 
-    two_stage_meta_path = os.path.join(output_dir, "two_stage_metadata.json")
-    with open(two_stage_meta_path, "w", encoding="utf-8") as f:
+    np.savez(
+        os.path.join(output_dir, "test_data.npz"),
+        X_test=X_test_selected,
+        y_test=y_test,
+    )
+    np.savez(
+        os.path.join(output_dir, "validation_data.npz"),
+        X_validation=X_validation_selected,
+        y_validation=y_validation,
+    )
+    validation_samples_path = os.path.join(output_dir, "validation_samples.json")
+    validation_records = df_validation_clean.to_dict(orient="records")
+    with open(validation_samples_path, "w", encoding="utf-8") as f:
+        json.dump(validation_records, f, ensure_ascii=False, indent=2)
+
+    split_meta_path = os.path.join(output_dir, "dataset_split_metadata.json")
+    with open(split_meta_path, "w", encoding="utf-8") as f:
         json.dump(
             {
-                "unknown_class_index": unknown_class_index,
+                "unknown_policy": "removed",
                 "unknown_label": unknown_label,
-                "known_threshold": 0.4,
-                "unknown_cap_ratio": unknown_cap_ratio,
+                "removed_unknown_count": removed_unknown_count,
+                "min_class_count": 50,
+                "split_ratio": {"train": 0.70, "test": 0.15, "validation": 0.15},
+                "max_train_samples": max_train_samples,
+                "class_count": int(len(valid_classes)),
+                "train_samples": int(len(X_train)),
+                "test_samples": int(len(X_test_selected)),
+                "validation_samples": int(len(X_validation_selected)),
+                "random_state": random_state,
             },
             f,
             ensure_ascii=False,
             indent=2,
         )
 
-    np.savez(os.path.join(output_dir, "test_data.npz"), X_test=X_test, y_test=y_test)
     print(f"  [OK] 训练集大小: {len(X_train)}")
-    print(f"  [OK] 测试集大小: {len(X_test)}")
+    print(f"  [OK] 测试集大小: {len(X_test_selected)}")
+    print(f"  [OK] 验证集大小: {len(X_validation_selected)}")
 
     print("\n【步骤 5/5】模型评估与选择...")
     evaluator = ModelEvaluator(output_dir, viz_dir)
-    evaluator.evaluate_all_models(X_test, y_test)
+    evaluator.evaluate_all_models(X_test_selected, y_test)
     comparison_df = evaluator.compare_models()
     best_name, best_model = evaluator.select_best_model()
 

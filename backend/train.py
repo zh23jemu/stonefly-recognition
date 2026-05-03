@@ -23,7 +23,13 @@ def parse_args():
         "--unknown-cap-ratio",
         type=float,
         default=0.2,
-        help="Maximum Unknown class ratio after downsampling (0-1)",
+        help="Deprecated: Unknown Stonefly is now removed before training",
+    )
+    parser.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=20000,
+        help="Maximum stratified samples used from the training split",
     )
     parser.add_argument("--random-state", type=int, default=42, help="Random seed")
     return parser.parse_args()
@@ -35,15 +41,16 @@ if __name__ == "__main__":
     print("开始训练石蝇分类模型...")
     print("=" * 60)
     print(
-        f"参数: cv={args.cv}, unknown_cap_ratio={args.unknown_cap_ratio}, random_state={args.random_state}"
+        f"参数: cv={args.cv}, max_train_samples={args.max_train_samples}, random_state={args.random_state}"
     )
+    print("说明: 当前训练流程会删除 Unknown Stonefly 样本，不再执行Unknown下采样。")
 
     evaluator, best_name, best_model = run_complete_ml_pipeline(
         data_path=args.data_path,
         output_dir=args.output_dir,
         viz_dir=args.viz_dir,
         cv=args.cv,
-        unknown_cap_ratio=args.unknown_cap_ratio,
+        max_train_samples=args.max_train_samples,
         random_state=args.random_state,
     )
 

@@ -5,6 +5,9 @@ import joblib
 import os
 
 
+UNKNOWN_CATEGORY = "__UNKNOWN__"
+
+
 class DataPreprocessor:
     def __init__(self):
         self.label_encoders = {}
@@ -13,6 +16,8 @@ class DataPreprocessor:
         self.numeric_features = []
         self.categorical_features = []
         self.target_encoder = None
+        self.missing_values = {}
+        self.outlier_bounds = {}
 
     def fit(self, df, target_column="species", scaling_method="standard"):
         self.scaling_method = scaling_method
@@ -30,7 +35,11 @@ class DataPreprocessor:
         for col in self.categorical_features:
             le = LabelEncoder()
             df[col] = df[col].astype(str)
-            le.fit(df[col])
+            # 为测试集、验证集或页面输入中训练集未见过的分类值保留兜底编码。
+            # 这样预处理规则仍然只由训练集拟合，同时不会因为新国家/科/颜色等
+            # 分类值直接中断预测流程。
+            values = pd.Series(df[col].unique().tolist() + [UNKNOWN_CATEGORY])
+            le.fit(values)
             self.label_encoders[col] = le
 
         self.target_encoder = LabelEncoder()
@@ -46,11 +55,76 @@ class DataPreprocessor:
 
         return self
 
+    def fit_cleaning_rules(
+        self, df, target_column="species", missing_strategy="median", threshold=1.5
+    ):
+        """只基于训练集学习缺失值填充值和异常值截断边界。
+
+        训练/测试/验证划分后，测试集和验证集不能反过来影响数据清洗规则；
+        因此这里把中位数、众数和 IQR 边界保存下来，后续所有数据集都复用
+        训练集上得到的规则，避免评估阶段出现数据泄漏。
+        """
+        self.missing_values = {}
+        self.outlier_bounds = {}
+
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if col == target_column:
+                continue
+
+            if missing_strategy == "median":
+                fill_value = df[col].median()
+            elif missing_strategy == "mean":
+                fill_value = df[col].mean()
+            else:
+                fill_value = 0
+            self.missing_values[col] = fill_value
+
+            clean_series = df[col].fillna(fill_value)
+            q1 = clean_series.quantile(0.25)
+            q3 = clean_series.quantile(0.75)
+            iqr = q3 - q1
+            self.outlier_bounds[col] = (
+                q1 - threshold * iqr,
+                q3 + threshold * iqr,
+            )
+
+        categorical_cols = df.select_dtypes(include=["object"]).columns
+        for col in categorical_cols:
+            if col == target_column:
+                continue
+            mode_value = df[col].mode()[0] if not df[col].mode().empty else "Unknown"
+            self.missing_values[col] = mode_value
+
+    def apply_cleaning_rules(self, df, target_column="species"):
+        """使用训练集清洗规则转换任意数据集。
+
+        该方法不会重新计算中位数、众数或异常值边界，保证验证集样本在
+        页面演示时经过的预处理流程与模型训练时一致。
+        """
+        df_clean = df.copy()
+
+        for col, fill_value in self.missing_values.items():
+            if col in df_clean.columns:
+                df_clean[col] = df_clean[col].fillna(fill_value)
+
+        for col, (lower_bound, upper_bound) in self.outlier_bounds.items():
+            if col in df_clean.columns:
+                df_clean[col] = df_clean[col].clip(
+                    lower=lower_bound, upper=upper_bound
+                )
+
+        return df_clean
+
     def transform(self, df, target_column="species"):
         df_processed = df.copy()
 
         for col in self.categorical_features:
             df_processed[col] = df_processed[col].astype(str)
+            known_values = set(self.label_encoders[col].classes_)
+            df_processed[col] = df_processed[col].where(
+                df_processed[col].isin(known_values), UNKNOWN_CATEGORY
+            )
             df_processed[col] = self.label_encoders[col].transform(df_processed[col])
 
         if self.numeric_features and self.scaler:
@@ -119,9 +193,15 @@ class DataPreprocessor:
         outlier_method="iqr",
         scaling_method="standard",
     ):
-        df_clean = self.handle_missing_values(df, missing_strategy)
-        df_clean = self.handle_outliers(df_clean, outlier_method)
+        self.fit_cleaning_rules(df, target_column, missing_strategy)
+        df_clean = self.apply_cleaning_rules(df, target_column)
         X, y = self.fit_transform(df_clean, target_column, scaling_method)
+        return X, y, df_clean
+
+    def transform_pipeline(self, df, target_column="species"):
+        """按训练集已拟合的清洗、编码和缩放规则转换测试集或验证集。"""
+        df_clean = self.apply_cleaning_rules(df, target_column)
+        X, y = self.transform(df_clean, target_column)
         return X, y, df_clean
 
     def save(self, filepath):
@@ -135,6 +215,8 @@ class DataPreprocessor:
         self.numeric_features = loaded_preprocessor.numeric_features
         self.categorical_features = loaded_preprocessor.categorical_features
         self.target_encoder = loaded_preprocessor.target_encoder
+        self.missing_values = getattr(loaded_preprocessor, "missing_values", {})
+        self.outlier_bounds = getattr(loaded_preprocessor, "outlier_bounds", {})
         return self
 
 

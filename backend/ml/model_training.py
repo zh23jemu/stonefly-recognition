@@ -34,30 +34,71 @@ class ModelTrainer:
         self.models = {}
         self.results = {}
 
-    def prepare_data(self, X, y, test_size=0.2, random_state=42):
+    def prepare_data(
+        self,
+        X,
+        y,
+        test_size=0.15,
+        validation_size=0.15,
+        random_state=42,
+        max_train_samples=20000,
+    ):
+        """按训练/测试/验证三份划分数据，并可限制最终训练样本量。
+
+        测试集用于模型评估，验证集用于前端演示选择样本。训练样本上限只
+        作用于训练集，不会裁剪测试集和验证集，避免页面演示样本不足。
+        """
         print(f"  Using {len(y)} samples for training")
 
-        max_samples = 10000
-        if len(X) > max_samples:
-            print(f"  Limiting to {max_samples} samples for training")
-            y_array = np.asarray(y)
-            splitter = StratifiedShuffleSplit(
-                n_splits=1, train_size=max_samples, random_state=random_state
-            )
-            train_idx, _ = next(splitter.split(np.zeros(len(y_array)), y_array))
-            X = X.iloc[train_idx] if hasattr(X, "iloc") else X[train_idx]
-            y = y_array[train_idx]
-
         y_array = np.asarray(y)
+        holdout_size = test_size + validation_size
         splitter = StratifiedShuffleSplit(
-            n_splits=1, test_size=test_size, random_state=random_state
+            n_splits=1, test_size=holdout_size, random_state=random_state
         )
-        train_idx, test_idx = next(splitter.split(np.zeros(len(y_array)), y_array))
+        train_idx, holdout_idx = next(splitter.split(np.zeros(len(y_array)), y_array))
         X_train = X.iloc[train_idx] if hasattr(X, "iloc") else X[train_idx]
-        X_test = X.iloc[test_idx] if hasattr(X, "iloc") else X[test_idx]
+        X_holdout = X.iloc[holdout_idx] if hasattr(X, "iloc") else X[holdout_idx]
         y_train = y_array[train_idx]
-        y_test = y_array[test_idx]
-        return X_train, X_test, y_train, y_test
+        y_holdout = y_array[holdout_idx]
+
+        validation_ratio_in_holdout = validation_size / holdout_size
+        holdout_splitter = StratifiedShuffleSplit(
+            n_splits=1,
+            test_size=validation_ratio_in_holdout,
+            random_state=random_state,
+        )
+        test_rel_idx, validation_rel_idx = next(
+            holdout_splitter.split(np.zeros(len(y_holdout)), y_holdout)
+        )
+        X_test = (
+            X_holdout.iloc[test_rel_idx]
+            if hasattr(X_holdout, "iloc")
+            else X_holdout[test_rel_idx]
+        )
+        X_validation = (
+            X_holdout.iloc[validation_rel_idx]
+            if hasattr(X_holdout, "iloc")
+            else X_holdout[validation_rel_idx]
+        )
+        y_test = y_holdout[test_rel_idx]
+        y_validation = y_holdout[validation_rel_idx]
+
+        if max_train_samples and len(X_train) > max_train_samples:
+            print(f"  Limiting train split to {max_train_samples} samples")
+            train_splitter = StratifiedShuffleSplit(
+                n_splits=1, train_size=max_train_samples, random_state=random_state
+            )
+            sampled_idx, _ = next(
+                train_splitter.split(np.zeros(len(y_train)), np.asarray(y_train))
+            )
+            X_train = (
+                X_train.iloc[sampled_idx]
+                if hasattr(X_train, "iloc")
+                else X_train[sampled_idx]
+            )
+            y_train = np.asarray(y_train)[sampled_idx]
+
+        return X_train, X_test, X_validation, y_train, y_test, y_validation
 
     def _get_cv_splitter(self, cv, y_train, random_state=42):
         if isinstance(cv, int):
@@ -325,14 +366,16 @@ class ModelTrainer:
 
 def train_models(X, y, output_dir="saved_models", cv=3):
     trainer = ModelTrainer(output_dir)
-    X_train, X_test, y_train, y_test = trainer.prepare_data(X, y)
+    X_train, X_test, X_validation, y_train, y_test, y_validation = trainer.prepare_data(
+        X, y
+    )
 
     models, results = trainer.train_all_models(X_train, y_train, cv=cv)
     trainer.save_models()
 
     np.savez(os.path.join(output_dir, "test_data.npz"), X_test=X_test, y_test=y_test)
 
-    return trainer, X_test, y_test
+    return trainer, X_test, X_validation, y_test, y_validation
 
 
 if __name__ == "__main__":
