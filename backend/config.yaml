@@ -1,0 +1,30 @@
+app:
+  name: "石蝇分类系统"
+  version: "1.0.0"
+  debug: true
+  host: "0.0.0.0"
+  port: 5000
+
+model:
+  test_size: 0.2
+  random_state: 42
+  cv_folds: 5
+  saved_models_dir: "saved_models"
+  best_model_name: "best_stonefly_model.pkl"
+
+data:
+  raw_data_path: "../data/final_stonefly_dataset.csv"
+  processed_data_dir: "data/processed"
+  target_column: "species"
+  feature_columns:
+    - "lat"
+    - "lon"
+    - "country"
+    - "family"
+    - "body_length_mm"
+    - "color"
+    - "head_feature"
+
+paths:
+  visualizations: "visualizations"
+  logs: "logs"

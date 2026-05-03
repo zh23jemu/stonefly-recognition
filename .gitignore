@@ -1,0 +1,74 @@
+# Python 缓存、测试缓存和本地虚拟环境
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Jupyter Notebook 本地检查点
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# 本地环境变量和敏感配置
+.env
+.env.*
+!.env.example
+
+# 前端依赖与构建产物
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/.cache/
+frontend/*.local
+
+# 训练数据、模型和实验输出通常体积较大，重新初始化仓库时默认不纳入版本控制
+data/*.csv
+final_stonefly_dataset.csv
+saved_models/
+backend/saved_models/
+backend/sweep_models/
+backend/visualizations/
+backend/sweep_visualizations/
+visualizations/
+*.joblib
+*.pkl
+*.pickle
+*.h5
+*.onnx
+*.pt
+*.pth
+
+# scikit-learn 源码目录可能产生的本地编译、测试和文档构建产物
+scikit-learn/build/
+scikit-learn/dist/
+scikit-learn/.spin/
+scikit-learn/.mesonpy-*/
+scikit-learn/sklearn/**/*.pyd
+scikit-learn/sklearn/**/*.so
+scikit-learn/sklearn/**/*.dll
+scikit-learn/doc/_build/
+scikit-learn/doc/auto_examples/
+scikit-learn/doc/modules/generated/
+scikit-learn/doc/datasets/generated/
+
+# 编辑器、系统和本地工具生成文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+.sisyphus/
+.git-backups/
