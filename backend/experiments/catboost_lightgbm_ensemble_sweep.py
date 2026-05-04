@@ -1,5 +1,4 @@
 import argparse
-import importlib
 import json
 import os
 import sys
@@ -113,7 +112,7 @@ def metric_dict(name, y_true, y_pred, proba, labels):
     return row
 
 
-def build_dataset(data_path):
+def build_dataset(data_path, max_train_samples):
     log("读取并划分数据...")
     df = pd.read_csv(data_path, encoding="utf-8")
     unknown_label = "Unknown Stonefly"
@@ -130,8 +129,10 @@ def build_dataset(data_path):
     test_idx, _ = next(sss2.split(np.arange(len(df_holdout)), df_holdout["species"].to_numpy()))
     df_test = df_holdout.iloc[test_idx].reset_index(drop=True)
 
-    if len(df_train) > 20000:
-        sss3 = StratifiedShuffleSplit(n_splits=1, train_size=20000, random_state=42)
+    if len(df_train) > max_train_samples:
+        sss3 = StratifiedShuffleSplit(
+            n_splits=1, train_size=max_train_samples, random_state=42
+        )
         sample_idx, _ = next(sss3.split(np.arange(len(df_train)), df_train["species"].to_numpy()))
         df_fit = df_train.iloc[sample_idx].reset_index(drop=True)
     else:
@@ -199,6 +200,9 @@ def load_state(state_file: Path):
             "started_at": datetime.now().isoformat(),
             "completed": [],
             "results": [],
+            "current_model": None,
+            "current_model_started_at": None,
+            "last_update_at": datetime.now().isoformat(),
         }
     return state
 
@@ -210,6 +214,16 @@ def persist_state(state_file: Path, state: dict):
 def maybe_append_result(state, row):
     state["results"].append(row)
     state["completed"].append(row["model"])
+    state["current_model"] = None
+    state["current_model_started_at"] = None
+    state["last_update_at"] = datetime.now().isoformat()
+
+
+def mark_current_model(state, model_name):
+    """在长模型开始前写入进度，避免第一轮训练期间 state 文件为空。"""
+    state["current_model"] = model_name
+    state["current_model_started_at"] = datetime.now().isoformat()
+    state["last_update_at"] = datetime.now().isoformat()
 
 
 def run_single_model(name, model, train_x, test_x, y_train, y_test, labels, fit_kwargs=None):
@@ -245,9 +259,13 @@ def run(args):
         "started_at": datetime.now().isoformat(),
         "completed": [],
         "results": [],
+        "current_model": None,
+        "current_model_started_at": None,
+        "last_update_at": datetime.now().isoformat(),
     }
+    persist_state(state_file, state)
 
-    dataset = build_dataset(args.data_path)
+    dataset = build_dataset(args.data_path, args.max_train_samples)
     y_train = dataset["y_train"]
     y_test = dataset["y_test"]
     labels = dataset["labels"]
@@ -330,6 +348,8 @@ def run(args):
             log(f"跳过已完成模型: {name}")
             continue
 
+        mark_current_model(state, name)
+        persist_state(state_file, state)
         row, fitted_model = run_single_model(
             name,
             model,
@@ -354,12 +374,14 @@ def run(args):
 
     # 如果三大模型都完成了，再构建集成结果。
     required = {"catboost", "lightgbm", "xgboost"}
-    if required.issubset(set(state["completed"])):
+    if required.issubset(set(state["completed"])) and "soft_voting_cat_lgbm_xgb" not in state["completed"]:
         done_models = {}
         for row in state["results"]:
             if row["model"] in required:
                 done_models[row["model"]] = row
 
+        mark_current_model(state, "soft_voting_cat_lgbm_xgb")
+        persist_state(state_file, state)
         log("开始构建软投票集成...")
         cat_model = fitted.get("catboost")
         lgb_model = fitted.get("lightgbm")
