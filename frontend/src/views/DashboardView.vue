@@ -76,7 +76,7 @@
                 <el-card class="stat-card">
                   <h3>指标说明</h3>
                   <p class="stat-desc">
-                    当前训练流程已过滤 Unknown Stonefly，按 70/15/15 划分训练集、测试集和验证集；预测页使用验证集样本展示四个模型的预测差异。
+                    当前训练流程已过滤 Unknown Stonefly，并使用完整7个输入特征训练模型；准确率为严格Top-1预测命中率。
                   </p>
                 </el-card>
               </el-col>
@@ -120,6 +120,16 @@
               <el-table-column prop="top_3_accuracy" label="Top-3准确率">
                 <template #default="{ row }">
                   <el-progress :percentage="Math.round(row.top_3_accuracy * 100)" />
+                </template>
+              </el-table-column>
+              <el-table-column prop="top_4_accuracy" label="Top-4准确率">
+                <template #default="{ row }">
+                  <el-progress :percentage="Math.round(row.top_4_accuracy * 100)" />
+                </template>
+              </el-table-column>
+              <el-table-column prop="top_5_accuracy" label="Top-5准确率">
+                <template #default="{ row }">
+                  <el-progress :percentage="Math.round(row.top_5_accuracy * 100)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -209,7 +219,9 @@ const modelComparisonData = computed(() => {
     recall: results.recall,
     f1_score: results.f1_score,
     macro_f1: results.macro_f1 ?? 0,
-    top_3_accuracy: results.top_3_accuracy ?? 0
+    top_3_accuracy: results.top_3_accuracy ?? 0,
+    top_4_accuracy: results.top_4_accuracy ?? results.top_3_accuracy ?? 0,
+    top_5_accuracy: results.top_5_accuracy ?? results.top_4_accuracy ?? 0
   }))
 })
 
@@ -218,7 +230,8 @@ const bestModelMetrics = computed(() => {
     return {
       macro_f1: 0,
       balanced_accuracy: 0,
-      top_3_accuracy: 0
+      top_3_accuracy: 0,
+      top_4_accuracy: 0
     }
   }
 
@@ -227,7 +240,8 @@ const bestModelMetrics = computed(() => {
   return {
     macro_f1: result.macro_f1 ?? 0,
     balanced_accuracy: result.balanced_accuracy ?? 0,
-    top_3_accuracy: result.top_3_accuracy ?? 0
+    top_3_accuracy: result.top_3_accuracy ?? 0,
+    top_4_accuracy: result.top_4_accuracy ?? result.top_3_accuracy ?? 0
   }
 })
 

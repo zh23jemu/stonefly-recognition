@@ -114,17 +114,19 @@ class ModelTrainer:
         from scipy.stats import randint
 
         param_distributions = {
-            "n_estimators": randint(50, 200),
-            "max_depth": [10, 20, 30, None],
-            "min_samples_split": randint(2, 10),
-            "min_samples_leaf": randint(1, 5),
+            "n_estimators": randint(250, 650),
+            "max_depth": [20, 30, 40, None],
+            "min_samples_split": randint(2, 8),
+            "min_samples_leaf": randint(1, 3),
         }
 
-        rf = RandomForestClassifier(random_state=42, n_jobs=2, class_weight="balanced")
+        rf = RandomForestClassifier(
+            random_state=42, n_jobs=2, class_weight="balanced_subsample"
+        )
         random_search = RandomizedSearchCV(
             rf,
             param_distributions,
-            n_iter=10,
+            n_iter=8,
             cv=self._get_cv_splitter(cv, y_train),
             scoring="f1_macro",
             n_jobs=1,
@@ -202,9 +204,11 @@ class ModelTrainer:
 
         if param_grid is None:
             param_grid = {
-                "n_estimators": [50, 100],
-                "max_depth": [3, 6],
-                "learning_rate": [0.1],
+                "n_estimators": [300, 500],
+                "max_depth": [6, 8],
+                "learning_rate": [0.06, 0.08],
+                "subsample": [0.9],
+                "colsample_bytree": [0.9],
             }
 
         xgb = XGBClassifier(
@@ -212,6 +216,7 @@ class ModelTrainer:
             eval_metric="mlogloss",
             n_jobs=2,
             num_class=len(le.classes_),
+            tree_method="hist",
         )
         grid_search = GridSearchCV(
             xgb,
@@ -246,8 +251,8 @@ class ModelTrainer:
 
         if param_grid is None:
             param_grid = {
-                "n_neighbors": [5, 10],
-                "weights": ["uniform"],
+                "n_neighbors": [7, 9, 15],
+                "weights": ["distance"],
             }
 
         knn = KNeighborsClassifier(n_jobs=2)

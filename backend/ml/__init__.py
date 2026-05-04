@@ -91,16 +91,11 @@ def run_complete_ml_pipeline(
     print(f"  [OK] PCA降维后: {results['pca']['n_components']} 组件")
     print(f"  [OK] LASSO选择特征: {results['lasso']['n_selected']} 个")
 
-    # 使用训练集拟合出的LASSO选择器转换训练、测试和验证数据。
-    X_train_selected = selector.transform(X_train_full)
-    X_test_selected = selector.transform(X_test_full)
-    X_validation_selected = selector.transform(X_validation_full)
-    if hasattr(X_train_selected, "columns"):
-        selected_feature_names = X_train_selected.columns.tolist()
-    else:
-        # 从训练集原始特征名中取出被LASSO保留的列，便于训练日志和报告说明。
-        selected_mask = selector.get_support()
-        selected_feature_names = X_train_full.columns[selected_mask].tolist()
+    # LASSO结果只作为可视化和报告参考，不再压缩模型训练输入。
+    # 当前只有7个手动输入特征，实验显示强行筛掉体长/头部特征会降低Top-1准确率；
+    # 因此四个模型统一使用完整特征，提高模型能利用的信息量。
+    selected_mask = selector.get_support()
+    selected_feature_names = X_train_full.columns[selected_mask].tolist()
 
     print(
         f"  [OK] 使用LASSO选择的 {len(selected_feature_names)} 个特征进行训练: {selected_feature_names}"
@@ -114,7 +109,7 @@ def run_complete_ml_pipeline(
 
     print("\n【步骤 4/5】模型训练...")
     trainer = ModelTrainer(output_dir)
-    X_train, y_train = X_train_selected, y_train_full
+    X_train, y_train = X_train_full, y_train_full
     if max_train_samples and len(X_train) > max_train_samples:
         from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -135,12 +130,12 @@ def run_complete_ml_pipeline(
 
     np.savez(
         os.path.join(output_dir, "test_data.npz"),
-        X_test=X_test_selected,
+        X_test=X_test_full,
         y_test=y_test,
     )
     np.savez(
         os.path.join(output_dir, "validation_data.npz"),
-        X_validation=X_validation_selected,
+        X_validation=X_validation_full,
         y_validation=y_validation,
     )
     validation_samples_path = os.path.join(output_dir, "validation_samples.json")
@@ -160,8 +155,9 @@ def run_complete_ml_pipeline(
                 "max_train_samples": max_train_samples,
                 "class_count": int(len(valid_classes)),
                 "train_samples": int(len(X_train)),
-                "test_samples": int(len(X_test_selected)),
-                "validation_samples": int(len(X_validation_selected)),
+                "test_samples": int(len(X_test_full)),
+                "validation_samples": int(len(X_validation_full)),
+                "model_feature_policy": "full_7_features_without_lasso_filter",
                 "random_state": random_state,
             },
             f,
@@ -170,12 +166,12 @@ def run_complete_ml_pipeline(
         )
 
     print(f"  [OK] 训练集大小: {len(X_train)}")
-    print(f"  [OK] 测试集大小: {len(X_test_selected)}")
-    print(f"  [OK] 验证集大小: {len(X_validation_selected)}")
+    print(f"  [OK] 测试集大小: {len(X_test_full)}")
+    print(f"  [OK] 验证集大小: {len(X_validation_full)}")
 
     print("\n【步骤 5/5】模型评估与选择...")
     evaluator = ModelEvaluator(output_dir, viz_dir)
-    evaluator.evaluate_all_models(X_test_selected, y_test)
+    evaluator.evaluate_all_models(X_test_full, y_test)
     comparison_df = evaluator.compare_models()
     best_name, best_model = evaluator.select_best_model()
 

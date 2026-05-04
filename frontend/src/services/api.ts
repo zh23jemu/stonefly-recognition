@@ -65,6 +65,8 @@ export interface ModelMetric {
   f1_score: number
   macro_f1?: number
   top_3_accuracy?: number
+  top_4_accuracy?: number
+  top_5_accuracy?: number
 }
 
 export interface ModelInfo {

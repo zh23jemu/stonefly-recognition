@@ -68,10 +68,9 @@ def _prepare_features(data, preprocessor, selector):
         raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
 
     input_df = input_df[REQUIRED_COLUMNS]
-    X_processed = preprocessor.transform(input_df)
-    if selector is not None:
-        X_processed = selector.transform(X_processed)
-    return X_processed
+    # 训练流程现在使用完整7个输入特征；LASSO选择器只作为分析报告保留。
+    # 因此预测接口不再用selector过滤特征，避免线上输入维度和新模型不一致。
+    return preprocessor.transform(input_df)
 
 
 def _label_from_encoded(preprocessor, encoded_label):

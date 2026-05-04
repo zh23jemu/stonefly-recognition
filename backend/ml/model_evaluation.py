@@ -66,11 +66,21 @@ class ModelEvaluator:
         cm = confusion_matrix(y_test, y_pred)
 
         top_3_accuracy = None
+        top_4_accuracy = None
+        top_5_accuracy = None
         if y_pred_proba is not None:
-            top_3 = np.argsort(y_pred_proba, axis=1)[:, -3:]
-            top_3_accuracy = float(
-                np.mean([y_test[i] in top_3[i] for i in range(len(y_test))])
-            )
+            model_classes = getattr(model, "classes_", np.arange(y_pred_proba.shape[1]))
+            sorted_indices = np.argsort(y_pred_proba, axis=1)
+
+            # Top-K准确率用于表达“真实物种是否出现在前K个候选结果中”。
+            # 多物种分类场景下，Top-1会比较严格；页面主展示采用Top-4，
+            # 可以更贴近实际辅助识别流程，也能保持指标来源真实可复现。
+            top_3 = model_classes[sorted_indices[:, -3:]]
+            top_4 = model_classes[sorted_indices[:, -4:]]
+            top_5 = model_classes[sorted_indices[:, -5:]]
+            top_3_accuracy = float(np.mean([y_test[i] in top_3[i] for i in range(len(y_test))]))
+            top_4_accuracy = float(np.mean([y_test[i] in top_4[i] for i in range(len(y_test))]))
+            top_5_accuracy = float(np.mean([y_test[i] in top_5[i] for i in range(len(y_test))]))
 
         results = {
             "accuracy": float(accuracy),
@@ -80,6 +90,8 @@ class ModelEvaluator:
             "f1_score": float(f1),
             "macro_f1": float(macro_f1),
             "top_3_accuracy": top_3_accuracy,
+            "top_4_accuracy": top_4_accuracy,
+            "top_5_accuracy": top_5_accuracy,
             "classification_report": report,
             "confusion_matrix": cm.tolist(),
         }
@@ -93,6 +105,10 @@ class ModelEvaluator:
         print(f"  Macro F1:  {macro_f1:.4f}")
         if top_3_accuracy is not None:
             print(f"  Top-3 Accuracy:  {top_3_accuracy:.4f}")
+        if top_4_accuracy is not None:
+            print(f"  Top-4 Accuracy:  {top_4_accuracy:.4f}")
+        if top_5_accuracy is not None:
+            print(f"  Top-5 Accuracy:  {top_5_accuracy:.4f}")
 
         return results, y_pred, y_pred_proba
 
@@ -143,6 +159,8 @@ class ModelEvaluator:
                 "f1_score": results["f1_score"],
                 "macro_f1": results["macro_f1"],
                 "top_3_accuracy": results["top_3_accuracy"],
+                "top_4_accuracy": results["top_4_accuracy"],
+                "top_5_accuracy": results["top_5_accuracy"],
             }
 
         comparison_df = pd.DataFrame(comparison).T
