@@ -71,7 +71,34 @@ def parse_args():
     parser.add_argument(
         "--force-restart",
         action="store_true",
-        help="Ignore existing state and start from scratch",
+        help="Ignore existing state and start from scratch; old state will be moved to a timestamped backup",
+    )
+    parser.add_argument(
+        "--models",
+        default="lightgbm,xgboost,random_forest,soft_voting_lgbm_xgb",
+        help=(
+            "Comma-separated models to run. Available: catboost, lightgbm, "
+            "xgboost, random_forest, soft_voting_lgbm_xgb, soft_voting_cat_lgbm_xgb. "
+            "Default skips CatBoost because it is much slower on this dataset."
+        ),
+    )
+    parser.add_argument(
+        "--catboost-iterations",
+        type=int,
+        default=120,
+        help="CatBoost iterations when catboost is included in --models",
+    )
+    parser.add_argument(
+        "--catboost-depth",
+        type=int,
+        default=6,
+        help="CatBoost tree depth when catboost is included in --models",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=max(1, int(os.environ.get("SLURM_CPUS_PER_TASK", "2"))),
+        help="Worker threads used by tree models",
     )
     return parser.parse_args()
 
@@ -211,6 +238,27 @@ def persist_state(state_file: Path, state: dict):
     save_json(state_file, state)
 
 
+def parse_model_names(raw_models):
+    """解析命令行传入的模型列表，并提前拦截拼写错误。
+
+    这个实验脚本经常在 Slurm 上长时间运行，所以这里宁可在启动时直接报错，
+    也不要等到排队和环境安装结束后才发现模型名写错。
+    """
+    allowed = {
+        "catboost",
+        "lightgbm",
+        "xgboost",
+        "random_forest",
+        "soft_voting_lgbm_xgb",
+        "soft_voting_cat_lgbm_xgb",
+    }
+    selected = [item.strip() for item in raw_models.split(",") if item.strip()]
+    unknown = sorted(set(selected) - allowed)
+    if unknown:
+        raise ValueError(f"未知模型名: {', '.join(unknown)}; 可选值: {', '.join(sorted(allowed))}")
+    return selected
+
+
 def maybe_append_result(state, row):
     state["results"].append(row)
     state["completed"].append(row["model"])
@@ -251,9 +299,21 @@ def run(args):
     state_file = Path(args.state_file)
     result_file = Path(args.result_file)
     progress_dir.mkdir(parents=True, exist_ok=True)
+    selected_models = parse_model_names(args.models)
+
+    log(f"本次选择模型: {', '.join(selected_models)}")
+    log(
+        f"线程数={args.threads}, max_train_samples={args.max_train_samples}, "
+        f"catboost_iterations={args.catboost_iterations}, catboost_depth={args.catboost_depth}"
+    )
 
     if args.force_restart and state_file.exists():
-        state_file.unlink()
+        # 不直接删除旧进度文件，避免误删历史实验记录；重跑时将旧 state 移到备份文件。
+        backup_file = state_file.with_suffix(
+            state_file.suffix + f".backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+        state_file.replace(backup_file)
+        log(f"旧进度文件已备份为: {backup_file}")
 
     state = load_state(state_file) if args.resume or state_file.exists() else {
         "started_at": datetime.now().isoformat(),
@@ -278,13 +338,13 @@ def run(args):
         (
             "catboost",
             CatBoostClassifier(
-                iterations=350,
-                depth=8,
+                iterations=args.catboost_iterations,
+                depth=args.catboost_depth,
                 learning_rate=0.08,
                 loss_function="MultiClass",
                 random_seed=42,
-                verbose=50,
-                thread_count=2,
+                verbose=10,
+                thread_count=args.threads,
                 allow_writing_files=False,
             ),
             dataset["X_train_cat"],
@@ -302,7 +362,7 @@ def run(args):
                 colsample_bytree=0.9,
                 class_weight="balanced",
                 random_state=42,
-                n_jobs=2,
+                n_jobs=args.threads,
                 verbose=20,
             ),
             dataset["X_train"],
@@ -319,7 +379,7 @@ def run(args):
                 colsample_bytree=0.9,
                 eval_metric="mlogloss",
                 random_state=42,
-                n_jobs=2,
+                n_jobs=args.threads,
                 tree_method="hist",
             ),
             dataset["X_train"],
@@ -333,7 +393,7 @@ def run(args):
                 max_depth=None,
                 min_samples_leaf=1,
                 class_weight="balanced_subsample",
-                n_jobs=2,
+                n_jobs=args.threads,
                 random_state=42,
             ),
             dataset["X_train"],
@@ -344,6 +404,9 @@ def run(args):
 
     fitted = {}
     for name, model, train_x, test_x, fit_kwargs in model_specs:
+        if name not in selected_models:
+            log(f"跳过未选择模型: {name}")
+            continue
         if name in state["completed"]:
             log(f"跳过已完成模型: {name}")
             continue
@@ -372,9 +435,59 @@ def run(args):
             joblib.dump(fitted_model, model_path)
             log(f"已保存检查点: {model_path.name}")
 
-    # 如果三大模型都完成了，再构建集成结果。
+    # 默认集成只依赖 LightGBM + XGBoost，先快速验证强树模型组合是否有收益。
+    required_fast = {"lightgbm", "xgboost"}
+    if (
+        "soft_voting_lgbm_xgb" in selected_models
+        and required_fast.issubset(set(state["completed"]))
+        and "soft_voting_lgbm_xgb" not in state["completed"]
+    ):
+        mark_current_model(state, "soft_voting_lgbm_xgb")
+        persist_state(state_file, state)
+        log("开始构建 LightGBM + XGBoost 软投票集成...")
+        lgb_model = fitted.get("lightgbm")
+        xgb_model = fitted.get("xgboost")
+
+        if lgb_model is None:
+            import joblib
+
+            lgb_model = joblib.load(progress_dir / "lightgbm_checkpoint.pkl")
+        if xgb_model is None:
+            import joblib
+
+            xgb_model = joblib.load(progress_dir / "xgboost_checkpoint.pkl")
+
+        proba_mix = np.mean(
+            [
+                lgb_model.predict_proba(dataset["X_test"]),
+                xgb_model.predict_proba(dataset["X_test"]),
+            ],
+            axis=0,
+        )
+        pred_mix = np.argmax(proba_mix, axis=1)
+        ensemble_row = metric_dict(
+            "soft_voting_lgbm_xgb",
+            y_test,
+            pred_mix,
+            proba_mix,
+            labels,
+        )
+        ensemble_row["status"] = "done"
+        ensemble_row["training_time_seconds"] = 0.0
+        maybe_append_result(state, ensemble_row)
+        persist_state(state_file, state)
+        log(
+            f"快速集成完成: acc={ensemble_row['accuracy']:.4f}, macro_f1={ensemble_row['macro_f1']:.4f}, "
+            f"top4={ensemble_row.get('top_4_accuracy', 0.0):.4f}"
+        )
+
+    # 如果显式选择并完成 CatBoost，再构建包含 CatBoost 的三模型集成。
     required = {"catboost", "lightgbm", "xgboost"}
-    if required.issubset(set(state["completed"])) and "soft_voting_cat_lgbm_xgb" not in state["completed"]:
+    if (
+        "soft_voting_cat_lgbm_xgb" in selected_models
+        and required.issubset(set(state["completed"]))
+        and "soft_voting_cat_lgbm_xgb" not in state["completed"]
+    ):
         done_models = {}
         for row in state["results"]:
             if row["model"] in required:

@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=stonefly-exp
 #SBATCH --account=mfk-gsr2
-#SBATCH --partition=plcyf-com
+#SBATCH --partition=ISP
 #SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=96G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=48G
 #SBATCH --time=3-00:00:00
 #SBATCH --output=logs/slurm/%x_%j.out
 #SBATCH --error=logs/slurm/%x_%j.err
@@ -37,9 +37,16 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 
-python backend/experiments/catboost_lightgbm_ensemble_sweep.py \
+# 默认执行快速实验：跳过 CatBoost，优先验证 LightGBM、XGBoost 和二者软投票。
+# 如果确实要包含 CatBoost，可提交时覆盖：
+#   MODELS=catboost,lightgbm,xgboost,soft_voting_cat_lgbm_xgb sbatch scripts/slurm_catboost_lightgbm_experiment.sbatch
+PYTHONUNBUFFERED=1 python -u backend/experiments/catboost_lightgbm_ensemble_sweep.py \
   --resume \
   --max-train-samples "${MAX_TRAIN_SAMPLES:-20000}" \
+  --models "${MODELS:-lightgbm,xgboost,random_forest,soft_voting_lgbm_xgb}" \
+  --catboost-iterations "${CATBOOST_ITERATIONS:-120}" \
+  --catboost-depth "${CATBOOST_DEPTH:-6}" \
+  --threads "${SLURM_CPUS_PER_TASK:-8}" \
   --progress-dir backend/saved_models/model_experiments \
   --state-file backend/saved_models/model_experiments/catboost_lightgbm_ensemble_state.json \
   --result-file backend/saved_models/model_experiments/catboost_lightgbm_ensemble_results.json
