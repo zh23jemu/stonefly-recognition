@@ -37,11 +37,18 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 
+EXTRA_ARGS=()
+if [ "${FORCE_RESTART:-0}" = "1" ]; then
+  # FORCE_RESTART=1 时，实验脚本会把旧 state 移动到带时间戳的备份文件，再重新开始。
+  EXTRA_ARGS+=(--force-restart)
+fi
+
 # 默认执行快速实验：跳过 CatBoost，优先验证 LightGBM、XGBoost 和二者软投票。
 # 如果确实要包含 CatBoost，可提交时覆盖：
 #   MODELS=catboost,lightgbm,xgboost,soft_voting_cat_lgbm_xgb sbatch scripts/slurm_catboost_lightgbm_experiment.sbatch
 PYTHONUNBUFFERED=1 python -u backend/experiments/catboost_lightgbm_ensemble_sweep.py \
   --resume \
+  "${EXTRA_ARGS[@]}" \
   --max-train-samples "${MAX_TRAIN_SAMPLES:-20000}" \
   --models "${MODELS:-lightgbm,xgboost,random_forest,soft_voting_lgbm_xgb}" \
   --catboost-iterations "${CATBOOST_ITERATIONS:-120}" \
