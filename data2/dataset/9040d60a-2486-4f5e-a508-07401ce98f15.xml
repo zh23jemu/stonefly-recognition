@@ -1,0 +1,759 @@
+<?xml version="1.0" encoding="utf-8"?>
+<eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://eml.ecoinformatics.org/eml-2.2.0 https://rs.gbif.org/schema/eml-gbif-profile/1.3/eml.xsd"
+packageId="9040d60a-2486-4f5e-a508-07401ce98f15"  system="http://gbif.org" scope="system"
+xml:lang="en">
+    <dataset>
+        <alternateIdentifier>10.15468/yx25ze</alternateIdentifier>
+        <alternateIdentifier>https://ipt.pensoft.net/resource?r=arkansas-plecoptera-v1</alternateIdentifier>
+        <title>Arkansas Plecoptera V1 data set</title>
+        <creator>
+            <individualName>
+                <givenName>Lily</givenName>
+                <surName>Hart</surName>
+            </individualName>
+            <organizationName>University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Graduate Research Assistant</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>lvhart2@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0002-2906-1849</userId>
+        </creator>
+        <creator>
+            <individualName>
+                <givenName>R. Edward</givenName>
+                <surName>DeWalt</surName>
+            </individualName>
+            <organizationName>Illinois Natural History Survey, University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Aquatic Entomologist</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>dewalt@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0001-9985-9250</userId>
+        </creator>
+        <creator>
+            <individualName>
+                <givenName>Phillip</givenName>
+                <surName>Hogan</surName>
+            </individualName>
+            <organizationName>University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Graduate Research Assistant</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>pnhogan2@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0002-6546-272X</userId>
+        </creator>
+        <creator>
+            <individualName>
+                <givenName>Scott</givenName>
+                <surName>Grubbs</surName>
+            </individualName>
+            <organizationName>Western Kentucky University</organizationName>
+            <positionName>Professor of Biology</positionName>
+            <address>
+                <deliveryPoint>Dept. of Biology, Western Kentucky University</deliveryPoint>
+                <city>Bowling Green</city>
+                <administrativeArea>Kentucky</administrativeArea>
+                <postalCode>42101</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>scott.grubbs@wku.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0003-2170-9716</userId>
+        </creator>
+        <creator>
+            <individualName>
+                <givenName>David</givenName>
+                <surName>Burton</surName>
+            </individualName>
+            <organizationName>Canadian Collection of Insects, Arachnids and Nematodes</organizationName>
+            <positionName>Curator</positionName>
+            <address>
+                <city>Ottawa</city>
+                <administrativeArea>Ontario</administrativeArea>
+                <country>CANADA</country>
+            </address>
+            <electronicMailAddress>dburton@uottawa.ca</electronicMailAddress>
+            <userId directory="http://orcid.org/">0009-0005-8582-7166</userId>
+        </creator>
+        <metadataProvider>
+            <individualName>
+                <givenName>Lily</givenName>
+                <surName>Hart</surName>
+            </individualName>
+            <organizationName>University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Graduate Research Assistant</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>lvhart2@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0002-2906-1849</userId>
+        </metadataProvider>
+        <associatedParty>
+            <individualName>
+                <givenName>Lily</givenName>
+                <surName>Hart</surName>
+            </individualName>
+            <organizationName>University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Graduate Research Assistant</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>lvhart2@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0002-2906-1849</userId>
+            <role>AUTHOR</role>
+        </associatedParty>
+        <associatedParty>
+            <individualName>
+                <givenName>R. Edward</givenName>
+                <surName>DeWalt</surName>
+            </individualName>
+            <organizationName>Illinois Natural History Survey</organizationName>
+            <positionName>Aquatic Entomologist</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>dewalt@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0001-9985-9250</userId>
+            <role>AUTHOR</role>
+        </associatedParty>
+        <associatedParty>
+            <individualName>
+                <givenName>Phillip</givenName>
+                <surName>Hogan</surName>
+            </individualName>
+            <organizationName>University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Graduate Research Assistant</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak St</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>pnhogan2@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0002-6546-272X</userId>
+            <role>AUTHOR</role>
+        </associatedParty>
+        <associatedParty>
+            <individualName>
+                <givenName>Scott</givenName>
+                <surName>Grubbs</surName>
+            </individualName>
+            <organizationName>Western Kentucky University</organizationName>
+            <positionName>Professor of Biology</positionName>
+            <address>
+                <deliveryPoint>Department of Biology, Western Kentucky University</deliveryPoint>
+                <city>Bowling Green</city>
+                <administrativeArea>Kentucky</administrativeArea>
+                <postalCode>42101</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>scott.grubbs@wku.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0003-2170-9716</userId>
+            <role>AUTHOR</role>
+        </associatedParty>
+        <associatedParty>
+            <individualName>
+                <givenName>David</givenName>
+                <surName>Burton</surName>
+            </individualName>
+            <organizationName>Canadian Collection of Insects, Arachnids and Nematodes</organizationName>
+            <positionName>Curator</positionName>
+            <address>
+                <city>Ottawa</city>
+                <administrativeArea>Ontario</administrativeArea>
+                <country>CANADA</country>
+            </address>
+            <electronicMailAddress>dburton@uottawa.ca</electronicMailAddress>
+            <userId directory="http://orcid.org/">0009-0005-8582-7166</userId>
+            <role>AUTHOR</role>
+        </associatedParty>
+        <pubDate>
+                2025-01-04
+        </pubDate>
+        <language>ENGLISH</language>
+        <abstract>
+            <para>The following dataset presents all of the specimen records included in the data paper titled: The stoneflies of Arkansas: a preliminary species checklist using museum specimen data. This paper is published in Biodiversity Data Journal. This dataset combines specimen record data from Illinois Natural History Survey Insect Collection, Canadian National Collection of Insects, Western Kentucky University, and several other institutional, personal, and literature records. The data includes specimens to their lowest possible taxonomic rank based on identification and determination. The data includes geo-references for all specimens if possible. Some records lacked precise locality information or were only designated to county level geographic area. 
+This data file will be available for download from Global Biodiversity Information Facility (GBIF). This data file contains a total of 3561 records, structured in 77 columns of data in DwCA format. These data were gathered from April 2024-August 2024. Many specimens used in this work were previously digitized and geo-referenced for a project that was supported by the United States National Science Foundation: CSBR: Natural History: Securing Alcohol Types and Donated Alcohol Specimens at the INHS Insect Collection NSF DBI: CSBR 14-58285.</para>
+        </abstract>
+        <keywordSet>
+            <keyword>Occurrence</keyword>
+            <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>
+        </keywordSet>
+        <keywordSet>
+            <keyword>Specimen</keyword>
+            <keywordThesaurus>GBIF Dataset Subtype Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_subtype.xml</keywordThesaurus>
+        </keywordSet>
+        <keywordSet>
+            <keyword>Checklist</keyword>
+            <keywordThesaurus>GBIF Dataset Type Vocabulary: http://rs.gbif.org/vocabulary/gbif/dataset_type_2015-07-10.xml</keywordThesaurus>
+        </keywordSet>
+        <intellectualRights>
+            <para>This work is licensed under a <ulink url="http://creativecommons.org/licenses/by/4.0/legalcode"><citetitle>Creative Commons Attribution (CC-BY) 4.0 License</citetitle></ulink>.</para>
+        </intellectualRights>
+        <licensed>
+            <licenseName>Creative Commons Attribution 4.0 International</licenseName>
+            <url>https://spdx.org/licenses/CC-BY-4.0.html</url>
+            <identifier>CC-BY-4.0</identifier>
+        </licensed>
+        <distribution scope="document">
+            <online>
+                <url function="download">https://ipt.pensoft.net/archive.do?r=arkansas-plecoptera-v1</url>
+            </online>
+        </distribution>
+        <coverage>
+            <geographicCoverage>
+                <geographicDescription>Arkansas, United States of America</geographicDescription>
+                <boundingCoordinates>
+                    <westBoundingCoordinate>-94.6</westBoundingCoordinate>
+                    <eastBoundingCoordinate>-89.6</eastBoundingCoordinate>
+                    <northBoundingCoordinate>36.5</northBoundingCoordinate>
+                    <southBoundingCoordinate>32.2</southBoundingCoordinate>
+                </boundingCoordinates>
+            </geographicCoverage>
+            <temporalCoverage>
+                <rangeOfDates>
+                    <beginDate>
+                        <calendarDate>                1869-01-01
+</calendarDate>
+                    </beginDate>
+                    <endDate>
+                        <calendarDate>                2024-05-26
+</calendarDate>
+                    </endDate>
+                </rangeOfDates>
+            </temporalCoverage>
+            <taxonomicCoverage>
+                <generalTaxonomicCoverage>This list accounts for 84 species of Plecoptera in the state of Arkansas, and was generated using museum specimen data.</generalTaxonomicCoverage>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia granulata (Claassen, 1924)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia jeanae Ross, 1964</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia malverna Ross, 1964</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia mohri Ross &amp; Ricker, 1964</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia mystica Frison, 1929</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia oribata Poulton &amp; Stewart, 1987</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia ozarkana Ross, 1964</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia peltoides Ross &amp; Ricker, 1964</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia rickeri Frison, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia sandersoni Ricker, 1952</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia vivipara (Claassen, 1924)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Allocapnia warreni Ross &amp; Yamamoto, 1966</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Nemocapnia carolina Banks, 1938</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Paracapnia angulata Hanson, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Alloperla caddo Poulton &amp; Stewart, 1987</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Alloperla caudata Frison, 1934</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Alloperla hamata Surdick, 1981</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Alloperla ouachita Stark &amp; Stewart, 1983</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Haploperla brevis (Banks, 1895)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Leuctra szczytkoi Stark &amp; Stewart, 1981</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Leuctra tenuis (Pictet, 1841)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Zealeuctra cherokee Stark &amp; Stewart, 1973</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Zealeuctra claasseni (Frison, 1929)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Zealeuctra narfi Ricker &amp; Ross, 1969</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Zealeuctra wachita Ricker &amp; Ross, 1969</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Zealeuctra warreni Ricker &amp; Ross, 1969</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Amphinemura delosa (Ricker, 1952)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Amphinemura texana Baumann, 1996</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Prostoia ozarkensis Baumann &amp; Grubbs, 2014</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Shipsa rotunda (Claassen, 1923)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Acroneuria evoluta Klapalek, 1909</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Acroneuria filicis Frison, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Acroneuria frisoni Stark &amp; Brown, 1991</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Acroneuria internata (Walker, 1852)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Acroneuria ozarkensis Poulton &amp; Stewart, 1991</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Acroneuria perplexa Frison, 1937</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Agnetina capitata (Pictet, 1841)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Agnetina flavescens (Walsh, 1862)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Attaneuria ruralis Hagen, 1861</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla carlsoni Stark &amp; Baumann, 1978</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla catharae Stark &amp; Baumann, 1978</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla choctaw Stark &amp; Baumann, 1978</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla falayah Stark &amp; Lentz, 1988</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla harpi Ernst &amp; Stewart, 1986</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla osage Stark &amp; Lentz, 1988</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Neoperla robisoni Poulton &amp; Stewart, 1986</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Paragnetina kansensis (Banks, 1905)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Paragnetina media (Walker, 1852)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta baumanni Stark, 1989</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta bolukta Stark, 1989</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta browni Stark, 1989</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta cinctipes (Banks, 1905)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta decipiens (Walsh, 1862)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta ephelida Grubbs &amp; DeWalt, 2012</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta fusca Poulton &amp; Stewart, 1991</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta lagoi Stark, 1989</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlesta sublobata South &amp; DeWalt, 2019</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlinella drymo (Newman, 1839)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Perlinella ephyre (Newman, 1839)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Clioperla clio (Newman, 1839)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Helopicus nalatus (Frison, 1942)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Hydroperla crosbyi (Needham &amp; Claassen, 1925)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Hydroperla fugitans (Needham &amp; Claassen, 1925)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla bilineata (Say, 1823)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla burksi Frison, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla davisi James, 1974</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla decepta Frison, 1935</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla dicala Frison, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla irregularis (Klapalek, 1923)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla namata Frison, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla ouachita Stark &amp; Stewart, 1973</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla richardsoni Frison, 1935</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla signata (Banks, 1902)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Isoperla szczytkoi Poulton &amp; Stewart, 1987</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Pteronarcys pictetii Hagen, 1873</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Strophopteryx arkansae Ricker &amp; Ross, 1975</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Strophopteryx cucullata Frison, 1934</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Strophopteryx fasciata (Burmeister, 1839)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Taeniopteryx burksi Ricker &amp; Ross, 1968</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Taeniopteryx lita Frison, 1942</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Taeniopteryx lonicera Ricker &amp; Ross, 1968</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Taeniopteryx maura (Pictet, 1841)</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Taeniopteryx metequi Ricker &amp; Ross, 1968</taxonRankValue>
+                </taxonomicClassification>
+                <taxonomicClassification>
+                    <taxonRankName>Species</taxonRankName>
+                    <taxonRankValue>Taeniopteryx parvula Banks, 1918</taxonRankValue>
+                </taxonomicClassification>
+            </taxonomicCoverage>
+        </coverage>
+        <maintenance>
+            <description>
+                <para></para>
+            </description>
+            <maintenanceUpdateFrequency>unkown</maintenanceUpdateFrequency>
+        </maintenance>
+        <contact>
+            <individualName>
+                <givenName>Lily</givenName>
+                <surName>Hart</surName>
+            </individualName>
+            <organizationName>University of Illinois, Urbana-Champaign</organizationName>
+            <positionName>Graduate Research Assistant</positionName>
+            <address>
+                <deliveryPoint>1816 S Oak Street</deliveryPoint>
+                <city>Champaign</city>
+                <administrativeArea>Illinois</administrativeArea>
+                <postalCode>61820</postalCode>
+                <country>UNITED_STATES</country>
+            </address>
+            <electronicMailAddress>lvhart2@illinois.edu</electronicMailAddress>
+            <userId directory="http://orcid.org/">0000-0002-2906-1849</userId>
+        </contact>
+        <methods>
+            <methodStep>
+                <description>
+                    <para>This data set was produced from multiple specimen data sets from several institutions. The Illinois Natural History Survey (INHS) uses the TaxonWorks™ bioinformatics management system to digitize insect collections. For this project, we filtered all of the Plecoptera specimens in TaxonWorks™ from the spatial geographic extent of the state of Arkansas. This returned &gt;3,100 records. Then we combined these data with records from the Canadian National Collection of Insects, Arachnids, and Nematodes (CNCI), Western Kentucky University Insect Collection (WKU), and several other institutional, personal, and literature records. Next, we checked for completeness and accuracy to determine a total of 3,561 records. Data were cleaned using Google Sheets, Microsoft Excel, and OpenRefine, confirming that all data fit the Darwin Core Archive standard format. Data were validated and mapped to this format before being published to GBIF. The completeness of species discovery was analyzed by constructing a matrix of species presence-absence and unique localities. The intersectional cells were filled with a 1, indicating species presence, or a 0, indicating species absence at that locality. This matrix was imported to RStudio, and the RStudio packages &quot;vegan&quot; and &quot;ggplot2&quot; were employed. The function specpool provided an estimate of species richness, while functions specaccum and ggplot generated the species accumuation curve.</para>
+                </description>
+            </methodStep>
+            <sampling>
+                <studyExtent>
+                    <description>
+                        <para>The specimens used in this study are museum quality specimens collected from the state of Arkansas from 1869-2024.</para>
+                    </description>
+                </studyExtent>
+                <samplingDescription>
+                    <para>Collection of insect specimens in the field: Methods employed to collect adult stoneflies include the use of beating sheets and sweep nets along riparian vegetation, handpicking with forceps of adult stoneflies from riparian rocks, vegetation, or bridges, and UV light traps for nocturnal adults. Methods to collect larvae include using D-frame nets, Surber samplers, and kick nets. Nymphal stoneflies were reared to adulthood within a Frigid Units Living Stream unit under simulated light and temperature regimes.</para>
+                </samplingDescription>
+            </sampling>
+            <qualityControl>
+                <description>
+                    <para>Museum specimens: Species names were reviewed and validated using Plecoptera Species File (DeWalt et al. 2024). Many specimens were re-examined to ensure that identifications were correct.</para>
+                </description>
+            </qualityControl>
+        </methods>
+
+            <project >
+                <title>The stoneflies (Plecoptera) of Arkansas: a checklist compiled from museum specimen data</title>
+                <personnel>
+                    <individualName>
+                    <givenName>Lily</givenName>
+                    <surName>Hart</surName>
+                    </individualName>
+            <userId directory="http://orcid.org/">0000-0002-2906-1849</userId>
+                    <role>AUTHOR</role>
+                </personnel>
+                <personnel>
+                    <individualName>
+                    <givenName>R. Edward</givenName>
+                    <surName>DeWalt</surName>
+                    </individualName>
+            <userId directory="http://orcid.org/">0000-0001-9985-9250</userId>
+                    <role>AUTHOR</role>
+                </personnel>
+                <personnel>
+                    <individualName>
+                    <givenName>Phillip</givenName>
+                    <surName>Hogan</surName>
+                    </individualName>
+            <userId directory="http://orcid.org/">0000-0002-6546-272X</userId>
+                    <role>AUTHOR</role>
+                </personnel>
+                <personnel>
+                    <individualName>
+                    <givenName>Scott</givenName>
+                    <surName>Grubbs</surName>
+                    </individualName>
+            <userId directory="http://orcid.org/">0000-0003-2170-9716</userId>
+                    <role>AUTHOR</role>
+                </personnel>
+                <personnel>
+                    <individualName>
+                    <givenName>David</givenName>
+                    <surName>Burton</surName>
+                    </individualName>
+            <userId directory="http://orcid.org/">0009-0005-8582-7166</userId>
+                    <role>AUTHOR</role>
+                </personnel>
+                <abstract>
+                    <para>This data set was produced under the project/data paper titled &quot;The stoneflies (Plecoptera) of Arkansas: a checklist compiled from museum specimen data&quot;. The paper is published by Biodiversity Data Journal. This project is an attempt to create a comprehensive stonefly specimen data set for the state of Arkansas. As of yet, a complete species checklist does not exist for the state of Arkansas. This species list can be used by research scientists, regional taxonomists, and agency managers to assess completeness of sampling, conservation status, and temporal shifts in the distribution of Arkansas stonefly species.</para>
+                </abstract>
+                <funding>
+                    <para></para>
+                </funding>
+            </project>
+    </dataset>
+
+    <additionalMetadata>
+        <metadata>
+            <gbif>
+                <dateStamp>2026-01-23T02:17:38Z</dateStamp>
+                <citation>Hart L, DeWalt R E, Hogan P, Grubbs S, Burton D (2025). Arkansas Plecoptera V1 data set. Biodiversity Data Journal. Occurrence dataset https://doi.org/10.15468/yx25ze accessed via GBIF.org on 2026-01-23.</citation>
+                <collection>
+                    
+                    
+                    <collectionName>Illinois Natural History Survey Insect Collection</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Canadian National Collection of Insects, Arachnids and Nematodes</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Brigham Young University Life Sciences Museum</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Carnegie Museum of Natural History</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>C.P. Gillette Museum of Arthropod Diversity</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Western Kentucky University</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Iowa State University Insect Collection</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>A.J. Cook Arthropod Research Collection, Michigan State University</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Museum of Biodiversity, University of Notre Dame</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>C.A. Triplehorn Insect Collection, Ohio State University</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Purdue University Entomological Research Collection</collectionName>
+                </collection>
+                <collection>
+                    
+                    
+                    <collectionName>Wisconsin Insect Research Collection, University of Wisconsin-Madison</collectionName>
+                </collection>
+                <specimenPreservationMethod>PINNED</specimenPreservationMethod>
+            </gbif>
+        </metadata>
+    </additionalMetadata>
+    </eml:eml>
