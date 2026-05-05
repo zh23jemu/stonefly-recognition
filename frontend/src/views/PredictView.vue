@@ -79,7 +79,7 @@
           <template #header>
             <div class="card-header">
               <el-icon><Check /></el-icon>
-              <span>层级预测结果</span>
+              <span>按科细分预测</span>
             </div>
           </template>
 
@@ -90,7 +90,7 @@
                 <strong>{{ selectedSample.species }}</strong>
               </div>
               <div>
-                <span class="summary-label">真实科</span>
+                <span class="summary-label">已选科</span>
                 <strong>{{ selectedSample.features.family }}</strong>
               </div>
               <el-tag effect="plain">验证集样本 #{{ selectedSample.id + 1 }}</el-tag>
@@ -116,17 +116,18 @@
               @click="submitPrediction"
             >
               <el-icon><DataAnalysis /></el-icon>
-              先预测科再细分物种
+              在已选科内预测物种
             </el-button>
 
-            <div v-if="predictionResult?.predicted_family" class="hierarchical-result">
+            <div v-if="predictionResult?.selected_family" class="hierarchical-result">
               <div class="result-grid">
                 <div class="result-block">
-                  <span class="summary-label">预测科</span>
-                  <strong>{{ predictionResult.predicted_family }}</strong>
+                  <span class="summary-label">使用科</span>
+                  <strong>{{ predictionResult.selected_family }}</strong>
                   <el-progress
-                    :percentage="toPercent(predictionResult.family_confidence)"
+                    :percentage="100"
                     :stroke-width="8"
+                    status="success"
                   />
                 </div>
                 <div class="result-block">
@@ -138,8 +139,8 @@
                   />
                 </div>
                 <div class="result-status">
-                  <el-tag :type="predictionResult.family_correct ? 'success' : 'danger'">
-                    科{{ predictionResult.family_correct ? '正确' : '错误' }}
+                  <el-tag type="success">
+                    已限定科
                   </el-tag>
                   <el-tag :type="predictionResult.species_correct ? 'success' : 'danger'">
                     物种{{ predictionResult.species_correct ? '正确' : '错误' }}
@@ -252,7 +253,7 @@ const submitPrediction = async () => {
     })
     if (result.success) {
       predictionResult.value = result
-      ElMessage.success('层级预测完成')
+      ElMessage.success('已在所选科内完成物种预测')
     } else {
       ElMessage.error(result.error || '预测失败')
     }

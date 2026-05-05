@@ -97,14 +97,22 @@ def _prepare_features(data, preprocessor, selector):
 def _prepare_hierarchical_features(data, model_bundle):
     """把页面输入转换为层级模型特征。
 
-    注意：这里不读取、不要求、不使用 family 字段。family 是第一阶段模型要预测
-    的标签，不是线上输入特征；验证集带来的 family 只用于结果对比。
+    物种子模型仍然只使用 family 之外的 6 个特征。family 由用户先选择，
+    用来决定进入哪个 species 子模型，不作为特征列参与模型计算。
     """
     input_df = pd.DataFrame([data])
     missing_columns = [col for col in HIERARCHICAL_INPUT_COLUMNS if col not in input_df.columns]
     if missing_columns:
         raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
     return model_bundle["preprocessor"].transform(input_df)
+
+
+def _require_selected_family(data):
+    """读取用户选择的 family，并给出明确的缺失提示。"""
+    selected_family = data.get("family") or data.get("selected_family")
+    if not selected_family:
+        raise ValueError("请先选择 family，再在该 family 下预测物种")
+    return str(selected_family)
 
 
 def _label_from_encoded(preprocessor, encoded_label):
@@ -137,20 +145,12 @@ def _top_predictions(model, X_processed, preprocessor, limit=3):
 
 def _predict_hierarchical(data, model_bundle, limit=4):
     X_processed = _prepare_hierarchical_features(data, model_bundle)
+    selected_family = _require_selected_family(data)
 
-    family_model = model_bundle["family_model"]
-    family_encoder = model_bundle["family_encoder"]
-    family_proba = family_model.predict_proba(X_processed)[0]
-    family_class_labels = getattr(family_model, "classes_", np.arange(len(family_proba)))
-    family_order = np.argsort(family_proba)[::-1]
-    predicted_family_encoded = int(family_class_labels[family_order[0]])
-    predicted_family = family_encoder.inverse_transform([predicted_family_encoded])[0]
-    family_confidence = float(family_proba[family_order[0]])
-
-    family_bundle = model_bundle["species_models"].get(predicted_family)
+    family_bundle = model_bundle["species_models"].get(selected_family)
     fallback_species_by_family = model_bundle.get("fallback_species_by_family", {})
     global_fallback_species = model_bundle.get("global_fallback_species")
-    fallback_species = fallback_species_by_family.get(predicted_family, global_fallback_species)
+    fallback_species = fallback_species_by_family.get(selected_family, global_fallback_species)
     used_fallback = False
     fallback_reason = None
 
@@ -181,14 +181,15 @@ def _predict_hierarchical(data, model_bundle, limit=4):
     species_prediction = top_species[0]["species"]
 
     return {
-        "predicted_family": predicted_family,
-        "family_confidence": family_confidence,
+        "selected_family": selected_family,
+        "predicted_family": selected_family,
+        "family_confidence": 1.0,
         "species_prediction": species_prediction,
         "species_confidence": top_species[0]["probability"],
         "top_4_species_predictions": top_species,
         "actual_family": actual_family,
         "actual_species": actual_species,
-        "family_correct": predicted_family == actual_family if actual_family else None,
+        "family_correct": selected_family == actual_family if actual_family else None,
         "species_correct": species_prediction == actual_species if actual_species else None,
         "used_fallback": used_fallback,
         "fallback_reason": fallback_reason,
@@ -205,7 +206,7 @@ def predict():
         return jsonify(
             {
                 "success": True,
-                "prediction_mode": "hierarchical_family_then_species",
+                "prediction_mode": "known_family_species",
                 **hierarchical_prediction,
             }
         )

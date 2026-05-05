@@ -37,6 +37,7 @@ export interface ModelPrediction {
 export interface PredictionResponse {
   success: boolean
   prediction_mode?: string
+  selected_family?: string
   predicted_family?: string
   family_confidence?: number
   species_prediction?: string
