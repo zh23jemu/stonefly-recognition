@@ -12,6 +12,7 @@ MODELS_DIR = os.path.join(BASE_DIR, "saved_models")
 PREPROCESSOR_PATH = os.path.join(MODELS_DIR, "preprocessor.pkl")
 LASSO_SELECTOR_PATH = os.path.join(MODELS_DIR, "lasso_selector.pkl")
 VALIDATION_SAMPLES_PATH = os.path.join(MODELS_DIR, "validation_samples.json")
+HIERARCHICAL_MODEL_PATH = os.path.join(MODELS_DIR, "hierarchical_model_bundle.pkl")
 
 MODEL_FILES = {
     "knn": "knn_model.pkl",
@@ -25,6 +26,15 @@ REQUIRED_COLUMNS = [
     "lon",
     "country",
     "family",
+    "body_length_mm",
+    "color",
+    "head_feature",
+]
+
+HIERARCHICAL_INPUT_COLUMNS = [
+    "lat",
+    "lon",
+    "country",
     "body_length_mm",
     "color",
     "head_feature",
@@ -60,6 +70,17 @@ def _load_models():
     return models, missing
 
 
+def _load_hierarchical_model():
+    """加载 family -> species 层级模型。
+
+    页面主预测现在依赖层级模型。如果用户尚未重新训练，直接返回清晰错误，
+    避免悄悄退回旧四模型结果造成展示口径混乱。
+    """
+    if not os.path.exists(HIERARCHICAL_MODEL_PATH):
+        raise FileNotFoundError("层级模型未找到，请先重新训练生成 hierarchical_model_bundle.pkl")
+    return joblib.load(HIERARCHICAL_MODEL_PATH)
+
+
 def _prepare_features(data, preprocessor, selector):
     """把原始特征转换成模型输入特征矩阵。"""
     input_df = pd.DataFrame([data])
@@ -71,6 +92,19 @@ def _prepare_features(data, preprocessor, selector):
     # 训练流程现在使用完整7个输入特征；LASSO选择器只作为分析报告保留。
     # 因此预测接口不再用selector过滤特征，避免线上输入维度和新模型不一致。
     return preprocessor.transform(input_df)
+
+
+def _prepare_hierarchical_features(data, model_bundle):
+    """把页面输入转换为层级模型特征。
+
+    注意：这里不读取、不要求、不使用 family 字段。family 是第一阶段模型要预测
+    的标签，不是线上输入特征；验证集带来的 family 只用于结果对比。
+    """
+    input_df = pd.DataFrame([data])
+    missing_columns = [col for col in HIERARCHICAL_INPUT_COLUMNS if col not in input_df.columns]
+    if missing_columns:
+        raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
+    return model_bundle["preprocessor"].transform(input_df)
 
 
 def _label_from_encoded(preprocessor, encoded_label):
@@ -101,45 +135,78 @@ def _top_predictions(model, X_processed, preprocessor, limit=3):
     ]
 
 
+def _predict_hierarchical(data, model_bundle, limit=4):
+    X_processed = _prepare_hierarchical_features(data, model_bundle)
+
+    family_model = model_bundle["family_model"]
+    family_encoder = model_bundle["family_encoder"]
+    family_proba = family_model.predict_proba(X_processed)[0]
+    family_class_labels = getattr(family_model, "classes_", np.arange(len(family_proba)))
+    family_order = np.argsort(family_proba)[::-1]
+    predicted_family_encoded = int(family_class_labels[family_order[0]])
+    predicted_family = family_encoder.inverse_transform([predicted_family_encoded])[0]
+    family_confidence = float(family_proba[family_order[0]])
+
+    family_bundle = model_bundle["species_models"].get(predicted_family)
+    fallback_species_by_family = model_bundle.get("fallback_species_by_family", {})
+    global_fallback_species = model_bundle.get("global_fallback_species")
+    fallback_species = fallback_species_by_family.get(predicted_family, global_fallback_species)
+    used_fallback = False
+    fallback_reason = None
+
+    if family_bundle:
+        species_model = family_bundle["model"]
+        species_encoder = family_bundle["species_encoder"]
+        species_proba = species_model.predict_proba(X_processed)[0]
+        species_class_labels = getattr(
+            species_model, "classes_", np.arange(len(species_proba))
+        )
+        species_order = np.argsort(species_proba)[::-1][:limit]
+        top_species = [
+            {
+                "species": species_encoder.inverse_transform(
+                    [int(species_class_labels[index])]
+                )[0],
+                "probability": float(species_proba[index]),
+            }
+            for index in species_order
+        ]
+    else:
+        used_fallback = True
+        fallback_reason = "family_has_no_species_model"
+        top_species = [{"species": fallback_species, "probability": 1.0}]
+
+    actual_family = data.get("family") or data.get("actual_family")
+    actual_species = data.get("species") or data.get("actual_species")
+    species_prediction = top_species[0]["species"]
+
+    return {
+        "predicted_family": predicted_family,
+        "family_confidence": family_confidence,
+        "species_prediction": species_prediction,
+        "species_confidence": top_species[0]["probability"],
+        "top_4_species_predictions": top_species,
+        "actual_family": actual_family,
+        "actual_species": actual_species,
+        "family_correct": predicted_family == actual_family if actual_family else None,
+        "species_correct": species_prediction == actual_species if actual_species else None,
+        "used_fallback": used_fallback,
+        "fallback_reason": fallback_reason,
+    }
+
+
 @predict_bp.route("/predict", methods=["POST"])
 def predict():
     try:
         data = request.get_json() or {}
-        actual_species = data.get("species") or data.get("actual_species")
-
-        preprocessor, selector = _load_preprocessing_assets()
-        models, missing = _load_models()
-        if missing:
-            return jsonify(
-                {
-                    "success": False,
-                    "error": f"模型文件缺失，请先重新训练: {', '.join(missing)}",
-                }
-            ), 503
-
-        X_processed = _prepare_features(data, preprocessor, selector)
-        model_predictions = []
-
-        for model_name, model in models.items():
-            top_3 = _top_predictions(model, X_processed, preprocessor)
-            prediction = top_3[0]["species"]
-            confidence = top_3[0]["probability"]
-            model_predictions.append(
-                {
-                    "model": model_name,
-                    "prediction": prediction,
-                    "confidence": confidence,
-                    "top_3_predictions": top_3,
-                    "actual_species": actual_species,
-                    "correct": prediction == actual_species if actual_species else None,
-                }
-            )
+        model_bundle = _load_hierarchical_model()
+        hierarchical_prediction = _predict_hierarchical(data, model_bundle)
 
         return jsonify(
             {
                 "success": True,
-                "actual_species": actual_species,
-                "model_predictions": model_predictions,
+                "prediction_mode": "hierarchical_family_then_species",
+                **hierarchical_prediction,
             }
         )
 

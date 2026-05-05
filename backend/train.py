@@ -32,6 +32,17 @@ def parse_args():
         help="Maximum stratified samples used from the training split",
     )
     parser.add_argument("--random-state", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--skip-hierarchical",
+        action="store_true",
+        help="Skip family -> species hierarchical model training",
+    )
+    parser.add_argument(
+        "--hierarchical-n-jobs",
+        type=int,
+        default=2,
+        help="Worker threads used by hierarchical XGBoost models",
+    )
     return parser.parse_args()
 
 
@@ -52,6 +63,8 @@ if __name__ == "__main__":
         cv=args.cv,
         max_train_samples=args.max_train_samples,
         random_state=args.random_state,
+        train_hierarchical=not args.skip_hierarchical,
+        hierarchical_n_jobs=args.hierarchical_n_jobs,
     )
 
     print("\n训练完成！")

@@ -39,6 +39,7 @@ data/*.csv
 final_stonefly_dataset.csv
 saved_models/
 backend/saved_models/
+backend/saved_models_smoke/
 backend/sweep_models/
 backend/visualizations/
 backend/sweep_visualizations/

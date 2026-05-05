@@ -3,6 +3,7 @@ from .preprocessing import preprocess_data, DataPreprocessor
 from .feature_engineering import perform_feature_engineering, FeatureEngineer
 from .model_training import train_models, ModelTrainer
 from .model_evaluation import evaluate_and_select_best_model, ModelEvaluator
+from .hierarchical_training import train_hierarchical_models
 import numpy as np
 import os
 import json
@@ -15,6 +16,8 @@ def run_complete_ml_pipeline(
     cv=5,
     max_train_samples=20000,
     random_state=42,
+    train_hierarchical=True,
+    hierarchical_n_jobs=2,
 ):
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(viz_dir, exist_ok=True)
@@ -174,6 +177,25 @@ def run_complete_ml_pipeline(
     evaluator.evaluate_all_models(X_test_full, y_test)
     comparison_df = evaluator.compare_models()
     best_name, best_model = evaluator.select_best_model()
+
+    if train_hierarchical:
+        print("\n【附加步骤】训练 family -> species 层级模型...")
+        hierarchical_results = train_hierarchical_models(
+            data_path=data_path,
+            output_dir=output_dir,
+            max_train_samples=max_train_samples,
+            random_state=random_state,
+            n_jobs=hierarchical_n_jobs,
+        )
+        print("  [OK] 层级模型结果已保存到 hierarchical_results.json")
+        print(
+            "  [OK] 层级Species Top-1: "
+            f"{hierarchical_results['metrics']['hierarchical_species_accuracy']:.4f}"
+        )
+        print(
+            "  [OK] 层级Species Top-4: "
+            f"{hierarchical_results['metrics']['hierarchical_species_top_4_accuracy']:.4f}"
+        )
 
     print("\n" + "=" * 60)
     print("机器学习流程完成!")

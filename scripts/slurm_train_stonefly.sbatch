@@ -38,9 +38,10 @@ export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
 
 cd backend
-python train.py \
+PYTHONUNBUFFERED=1 python -u train.py \
   --data-path ../data/final_stonefly_dataset.csv \
   --output-dir saved_models \
   --viz-dir visualizations \
   --cv "${CV:-3}" \
-  --max-train-samples "${MAX_TRAIN_SAMPLES:-20000}"
+  --max-train-samples "${MAX_TRAIN_SAMPLES:-20000}" \
+  --hierarchical-n-jobs "${SLURM_CPUS_PER_TASK:-16}"

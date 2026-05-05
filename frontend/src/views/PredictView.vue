@@ -79,7 +79,7 @@
           <template #header>
             <div class="card-header">
               <el-icon><Check /></el-icon>
-              <span>四模型预测对比</span>
+              <span>层级预测结果</span>
             </div>
           </template>
 
@@ -89,6 +89,10 @@
                 <span class="summary-label">真实物种</span>
                 <strong>{{ selectedSample.species }}</strong>
               </div>
+              <div>
+                <span class="summary-label">真实科</span>
+                <strong>{{ selectedSample.features.family }}</strong>
+              </div>
               <el-tag effect="plain">验证集样本 #{{ selectedSample.id + 1 }}</el-tag>
             </div>
 
@@ -96,11 +100,13 @@
               <el-descriptions-item label="纬度">{{ selectedSample.features.lat }}</el-descriptions-item>
               <el-descriptions-item label="经度">{{ selectedSample.features.lon }}</el-descriptions-item>
               <el-descriptions-item label="国家">{{ selectedSample.features.country }}</el-descriptions-item>
-              <el-descriptions-item label="科">{{ selectedSample.features.family }}</el-descriptions-item>
               <el-descriptions-item label="体长">
                 {{ Number(selectedSample.features.body_length_mm).toFixed(1) }} mm
               </el-descriptions-item>
               <el-descriptions-item label="颜色">{{ selectedSample.features.color }}</el-descriptions-item>
+              <el-descriptions-item label="头部特征">
+                {{ selectedSample.features.head_feature }}
+              </el-descriptions-item>
             </el-descriptions>
 
             <el-button
@@ -110,41 +116,66 @@
               @click="submitPrediction"
             >
               <el-icon><DataAnalysis /></el-icon>
-              使用四个模型预测
+              先预测科再细分物种
             </el-button>
 
-            <el-table
-              v-if="predictionResult?.model_predictions?.length"
-              :data="predictionResult.model_predictions"
-              border
-              class="prediction-table"
-            >
-              <el-table-column label="模型" width="150">
-                <template #default="{ row }">{{ formatModelName(row.model) }}</template>
-              </el-table-column>
-              <el-table-column prop="prediction" label="预测物种" min-width="190" show-overflow-tooltip />
-              <el-table-column label="置信度" width="150">
-                <template #default="{ row }">
-                  <el-progress :percentage="Math.round(row.confidence * 100)" />
-                </template>
-              </el-table-column>
-              <el-table-column label="结果" width="90">
-                <template #default="{ row }">
-                  <el-tag :type="row.correct ? 'success' : 'danger'">
-                    {{ row.correct ? '正确' : '错误' }}
+            <div v-if="predictionResult?.predicted_family" class="hierarchical-result">
+              <div class="result-grid">
+                <div class="result-block">
+                  <span class="summary-label">预测科</span>
+                  <strong>{{ predictionResult.predicted_family }}</strong>
+                  <el-progress
+                    :percentage="toPercent(predictionResult.family_confidence)"
+                    :stroke-width="8"
+                  />
+                </div>
+                <div class="result-block">
+                  <span class="summary-label">预测物种</span>
+                  <strong>{{ predictionResult.species_prediction }}</strong>
+                  <el-progress
+                    :percentage="toPercent(predictionResult.species_confidence)"
+                    :stroke-width="8"
+                  />
+                </div>
+                <div class="result-status">
+                  <el-tag :type="predictionResult.family_correct ? 'success' : 'danger'">
+                    科{{ predictionResult.family_correct ? '正确' : '错误' }}
                   </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="Top-3" min-width="220">
-                <template #default="{ row }">
-                  <div class="top-list">
-                    <span v-for="item in row.top_3_predictions" :key="`${row.model}-${item.species}`">
-                      {{ item.species }} {{ (item.probability * 100).toFixed(1) }}%
-                    </span>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
+                  <el-tag :type="predictionResult.species_correct ? 'success' : 'danger'">
+                    物种{{ predictionResult.species_correct ? '正确' : '错误' }}
+                  </el-tag>
+                </div>
+              </div>
+
+              <el-alert
+                v-if="predictionResult.used_fallback"
+                type="warning"
+                show-icon
+                :closable="false"
+                title="该科没有可用的物种子模型，已使用回退预测"
+              />
+
+              <el-table
+                :data="predictionResult.top_4_species_predictions || []"
+                border
+                class="prediction-table"
+              >
+                <el-table-column type="index" label="#" width="60" />
+                <el-table-column prop="species" label="Top-4候选物种" min-width="220" show-overflow-tooltip />
+                <el-table-column label="概率" width="180">
+                  <template #default="{ row }">
+                    <el-progress :percentage="toPercent(row.probability)" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="命中" width="90">
+                  <template #default="{ row }">
+                    <el-tag :type="row.species === selectedSample?.species ? 'success' : 'info'">
+                      {{ row.species === selectedSample?.species ? '是' : '否' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
           </template>
 
           <el-empty v-else description="请选择一条验证集样本" />
@@ -221,7 +252,7 @@ const submitPrediction = async () => {
     })
     if (result.success) {
       predictionResult.value = result
-      ElMessage.success('四模型预测完成')
+      ElMessage.success('层级预测完成')
     } else {
       ElMessage.error(result.error || '预测失败')
     }
@@ -232,14 +263,8 @@ const submitPrediction = async () => {
   }
 }
 
-const formatModelName = (name: string) => {
-  const modelNames: Record<string, string> = {
-    knn: 'KNN',
-    random_forest: 'Random Forest',
-    svm: 'SVM',
-    xgboost: 'XGBoost'
-  }
-  return modelNames[name] || name
+const toPercent = (value?: number) => {
+  return Math.round((value || 0) * 100)
 }
 
 onMounted(() => {
@@ -274,6 +299,36 @@ onMounted(() => {
 .sample-table,
 .prediction-table {
   width: 100%;
+}
+
+.hierarchical-result {
+  display: grid;
+  gap: 16px;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.result-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.result-block strong {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.result-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
 }
 
 .pagination-wrap {
@@ -325,6 +380,14 @@ onMounted(() => {
   .sample-summary {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .result-status {
+    align-items: flex-start;
   }
 }
 </style>
