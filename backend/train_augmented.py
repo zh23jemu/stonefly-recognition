@@ -125,8 +125,8 @@ def parse_args():
                    help="跳过 SVM（节省时间）")
     p.add_argument("--skip-knn",    action="store_true",
                    help="跳过 KNN（节省时间）")
-    p.add_argument("--xgb-trees",   type=int, default=1500,
-                   help="XGBoost n_estimators")
+    p.add_argument("--xgb-trees",   type=int, default=300,
+                   help="XGBoost n_estimators（多分类内部树数=n_classes×此值，默认300）")
     p.add_argument("--xgb-depth",   type=int, default=10,
                    help="XGBoost max_depth")
     p.add_argument("--rf-trees",     type=int, default=600,
@@ -276,6 +276,15 @@ def main():
                                            "max_depth": args.xgb_depth,
                                            "learning_rate": 0.05}}
 
+    # ⚠️  XGBoost 多分类内部树数 = n_classes × n_estimators
+    # 696 × 1500 ≈ 104 万棵树，模型占内存 ~15-20 GB
+    # 必须在训练下一个模型前显式释放，否则累积导致 OOM
+    import gc
+    del xgb
+    del sw_xgb, y_tr_xgb, y_te_xgb
+    gc.collect()
+    log("XGBoost 模型已释放内存，准备训练 RF...")
+
     # ── 5. Random Forest（限 RF_CAP 样本，目标 ≈82%）──────────────────────────
     log("\n" + "=" * 50)
     X_rf, y_rf = stratified_subsample(X_train_np, y_train, args.rf_cap, seed)
@@ -305,6 +314,9 @@ def main():
                                       "params": {"n_estimators": args.rf_trees,
                                                  "max_depth": args.rf_max_depth,
                                                  "n_jobs": args.rf_jobs}}
+    del rf, X_rf, y_rf, sw_rf
+    gc.collect()
+    log("RF 模型已释放内存...")
 
     # ── 6. KNN（限 KNN_CAP 样本）─────────────────────────────────────────────
     if not args.skip_knn:
@@ -328,6 +340,9 @@ def main():
         evaluation_results["knn"] = knn_res
         training_log["knn"] = {"training_time_sec": round(knn_time, 1),
                                 "n_train": len(X_knn)}
+        del knn, X_knn, y_knn
+        gc.collect()
+        log("KNN 模型已释放内存...")
     else:
         log("跳过 KNN（--skip-knn）")
 

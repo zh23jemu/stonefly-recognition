@@ -94,7 +94,7 @@ CMD="python -u train_augmented.py \
   --viz-dir     visualizations_augmented \
   --n-jobs      $NCPU \
   --seed        42 \
-  --xgb-trees   ${XGB_TREES:-1500} \
+  --xgb-trees   ${XGB_TREES:-300} \
   --xgb-depth   ${XGB_DEPTH:-10} \
   --rf-trees    ${RF_TREES:-600} \
   --rf-cap      ${RF_CAP:-80000} \
