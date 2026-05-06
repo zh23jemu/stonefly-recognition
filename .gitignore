@@ -42,9 +42,11 @@ final_stonefly_dataset.csv
 saved_models/
 backend/saved_models/
 backend/saved_models_smoke/
+backend/saved_models_augmented*/
 backend/saved_models_data2_enhanced*/
 backend/sweep_models/
 backend/visualizations/
+backend/visualizations_augmented*/
 backend/sweep_visualizations/
 visualizations/
 *.joblib
