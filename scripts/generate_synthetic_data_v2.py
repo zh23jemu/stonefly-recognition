@@ -171,31 +171,31 @@ FAMILY_ECOLOGY = {
         "ls_w": {"adult": 0.75, "immature": 0.20, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
-    # 早春细溪：3-4 月峰值，溪流主导（时间比 Taeniopterygidae 晚一个月）
+    # 早春细溪：2-3 月集中，stream 主导，4 月权重压低（与 Leuctridae 完全错开）
     "Nemouridae": {
-        "month_w": {3: 0.30, 4: 0.50, 5: 0.20},
-        "habitat_w": {"stream": 0.82, "spring": 0.13, "river": 0.05},
+        "month_w": {2: 0.15, 3: 0.65, 4: 0.20},
+        "habitat_w": {"stream": 0.85, "spring": 0.10, "river": 0.05},
         "ls_w": {"adult": 0.70, "immature": 0.25, "egg": 0.05},
         "sex_w": {"male": 0.43, "female": 0.57},
     },
-    # 春末-初夏涌泉/头水专家：5-6 月峰值，spring 比例最高（栖息地是最大区分点）
+    # 春末涌泉专家：5-6 月峰值，spring 比例最高（从 5 月起，与 Nemouridae 不再重叠）
     "Leuctridae": {
-        "month_w": {5: 0.35, 6: 0.45, 7: 0.20},
-        "habitat_w": {"spring": 0.55, "stream": 0.40, "river": 0.05},
+        "month_w": {5: 0.45, 6: 0.45, 7: 0.10},
+        "habitat_w": {"spring": 0.68, "stream": 0.29, "river": 0.03},
         "ls_w": {"adult": 0.70, "immature": 0.25, "egg": 0.05},
         "sex_w": {"male": 0.45, "female": 0.55},
     },
-    # 初夏-中夏河流捕食者：6-7 月峰值，river 偏好（与 Leuctridae 时间有重叠但栖息地不同）
+    # 初夏河流捕食者：6-7 月峰值，river 比例提高到 70%（与 Leuctridae 时间和栖息地双重区分）
     "Perlodidae": {
-        "month_w": {6: 0.30, 7: 0.45, 8: 0.25},
-        "habitat_w": {"river": 0.58, "stream": 0.37, "spring": 0.05},
+        "month_w": {6: 0.35, 7: 0.55, 8: 0.10},
+        "habitat_w": {"river": 0.70, "stream": 0.27, "spring": 0.03},
         "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
-    # 盛夏小型绿色石蝇：7-8 月峰值，溪流（时间最晚的小型科）
+    # 盛夏末-初秋小型溪流石蝇：8-9 月峰值（推后，与 Perlodidae 完全错开）
     "Chloroperlidae": {
-        "month_w": {7: 0.30, 8: 0.50, 9: 0.20},
-        "habitat_w": {"stream": 0.78, "river": 0.18, "spring": 0.04},
+        "month_w": {8: 0.30, 9: 0.55, 10: 0.15},
+        "habitat_w": {"stream": 0.82, "river": 0.14, "spring": 0.04},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.45, "female": 0.55},
     },
