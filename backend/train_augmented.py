@@ -129,10 +129,14 @@ def parse_args():
                    help="XGBoost n_estimators")
     p.add_argument("--xgb-depth",   type=int, default=10,
                    help="XGBoost max_depth")
-    p.add_argument("--rf-trees",    type=int, default=600,
+    p.add_argument("--rf-trees",     type=int, default=600,
                    help="RF n_estimators")
-    p.add_argument("--rf-cap",      type=int, default=150000,
-                   help="RF 最大训练样本数")
+    p.add_argument("--rf-cap",       type=int, default=80000,
+                   help="RF 最大训练样本数（减小可降低内存）")
+    p.add_argument("--rf-max-depth", type=int, default=30,
+                   help="RF max_depth，None 表示不限（不限会 OOM）")
+    p.add_argument("--rf-jobs",      type=int, default=8,
+                   help="RF 专用并行数，独立于 --n-jobs（RF 内存随并行数线性增长）")
     p.add_argument("--svm-cap",     type=int, default=30000,
                    help="SVM 最大训练样本数")
     p.add_argument("--knn-cap",     type=int, default=50000,
@@ -275,18 +279,18 @@ def main():
     # ── 5. Random Forest（限 RF_CAP 样本，目标 ≈82%）──────────────────────────
     log("\n" + "=" * 50)
     X_rf, y_rf = stratified_subsample(X_train_np, y_train, args.rf_cap, seed)
-    log(f"训练 Random Forest  样本={len(X_rf)}  trees={args.rf_trees}")
+    log(f"训练 Random Forest  样本={len(X_rf)}  trees={args.rf_trees}  max_depth={args.rf_max_depth}  n_jobs={args.rf_jobs}")
 
     sw_rf = compute_sample_weight("balanced", y_rf)
     t0 = time.time()
     rf = RandomForestClassifier(
         n_estimators        = args.rf_trees,
-        max_depth           = None,          # 不限深度，让每棵树充分生长
+        max_depth           = args.rf_max_depth,   # 限制深度，防止 OOM
         min_samples_split   = 2,
         min_samples_leaf    = 1,
         max_features        = "sqrt",
         class_weight        = "balanced_subsample",
-        n_jobs              = args.n_jobs,
+        n_jobs              = args.rf_jobs,         # RF 独立并行数（比 XGBoost 小）
         random_state        = seed,
     )
     rf.fit(X_rf, y_rf, sample_weight=sw_rf)
@@ -298,7 +302,9 @@ def main():
     evaluation_results["random_forest"] = rf_res
     training_log["random_forest"] = {"training_time_sec": round(rf_time, 1),
                                       "n_train": len(X_rf),
-                                      "params": {"n_estimators": args.rf_trees}}
+                                      "params": {"n_estimators": args.rf_trees,
+                                                 "max_depth": args.rf_max_depth,
+                                                 "n_jobs": args.rf_jobs}}
 
     # ── 6. KNN（限 KNN_CAP 样本）─────────────────────────────────────────────
     if not args.skip_knn:

@@ -61,6 +61,8 @@ PYTHONUNBUFFERED=1 python -u train_augmented.py \
   --xgb-depth   8 \
   --rf-trees    100 \
   --rf-cap      30000 \
+  --rf-max-depth 25 \
+  --rf-jobs     4 \
   --skip-svm \
   --skip-knn
 

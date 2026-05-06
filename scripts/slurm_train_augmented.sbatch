@@ -13,9 +13,14 @@
 #   XGB_TREES=1200    XGBoost 树的棵数（默认 1500）
 #   XGB_DEPTH=10      XGBoost 最大深度（默认 10）
 #   RF_TREES=600      RF 树的棵数（默认 600）
-#   RF_CAP=150000     RF 最大训练样本（默认 150000）
+#   RF_CAP=80000      RF 最大训练样本（默认 80000，过大会 OOM）
+#   RF_MAX_DEPTH=30   RF 最大深度（默认 30，None=不限会 OOM）
+#   RF_JOBS=8         RF 并行数（默认 8，独立于全局 n_jobs）
 #   SVM_CAP=30000     SVM 最大训练样本（默认 30000）
 #   KNN_CAP=50000     KNN 最大训练样本（默认 50000）
+#
+# ⚠️  RF 内存注意：max_depth=None + 大样本 + 多并行 → 容易 OOM
+#     如果仍然 OOM，调低 RF_CAP=50000 或 RF_MAX_DEPTH=20
 #
 # 示例（跳过 SVM 加速实验）：
 #   sbatch --export=ALL,SKIP_SVM=1 scripts/slurm_train_augmented.sbatch
@@ -92,7 +97,9 @@ CMD="python -u train_augmented.py \
   --xgb-trees   ${XGB_TREES:-1500} \
   --xgb-depth   ${XGB_DEPTH:-10} \
   --rf-trees    ${RF_TREES:-600} \
-  --rf-cap      ${RF_CAP:-150000} \
+  --rf-cap      ${RF_CAP:-80000} \
+  --rf-max-depth ${RF_MAX_DEPTH:-30} \
+  --rf-jobs     ${RF_JOBS:-8} \
   --svm-cap     ${SVM_CAP:-30000} \
   --knn-cap     ${KNN_CAP:-50000}"
 
