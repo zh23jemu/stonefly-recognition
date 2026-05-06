@@ -36,6 +36,7 @@ frontend/*.local
 
 # 训练数据、模型和实验输出通常体积较大，重新初始化仓库时默认不纳入版本控制
 data/*.csv
+!data/stonefly_combined_data_augmented.csv
 data2/
 final_stonefly_dataset.csv
 saved_models/
