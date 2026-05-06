@@ -10,6 +10,7 @@
 # 可选覆盖参数（提交时用 --export 传入）：
 #   SKIP_SVM=1        跳过 SVM，大幅缩短时间
 #   SKIP_KNN=1        跳过 KNN
+#   SKIP_HIER=1       跳过 family -> species 层级模型
 #   XGB_TREES=1200    XGBoost 树的棵数（默认 1500）
 #   XGB_DEPTH=10      XGBoost 最大深度（默认 10）
 #   RF_TREES=600      RF 树的棵数（默认 600）
@@ -18,6 +19,8 @@
 #   RF_JOBS=8         RF 并行数（默认 8，独立于全局 n_jobs）
 #   SVM_CAP=30000     SVM 最大训练样本（默认 30000）
 #   KNN_CAP=50000     KNN 最大训练样本（默认 50000）
+#   HIER_CAP=80000    层级模型最大训练样本数（默认 80000）
+#   HIER_JOBS=4       层级模型并行线程数（默认 4）
 #
 # ⚠️  RF 内存注意：max_depth=None + 大样本 + 多并行 → 容易 OOM
 #     如果仍然 OOM，调低 RF_CAP=50000 或 RF_MAX_DEPTH=20
@@ -70,12 +73,13 @@ if [ ! -d ".venv" ]; then
   "$PYTHON_BIN" -m venv .venv
 fi
 
-source .venv/bin/activate
-echo "Python: $(python --version)  路径: $(which python)"
+VENV_PYTHON="$REPO_ROOT/.venv/bin/python"
+VENV_PIP="$REPO_ROOT/.venv/bin/pip"
+echo "Python: $($VENV_PYTHON --version)  路径: $VENV_PYTHON"
 
 echo "安装/更新依赖..."
-pip install --upgrade pip -q
-pip install -r backend/requirements.txt -q
+"$VENV_PIP" install --upgrade pip -q
+"$VENV_PIP" install -r backend/requirements.txt -q
 
 # ── 线程数绑定（防止 BLAS 过度抢占）─────────────────────────────────────────
 NCPU="${SLURM_CPUS_PER_TASK:-32}"
@@ -88,7 +92,7 @@ echo "线程数绑定: OMP/MKL/OPENBLAS = $NCPU"
 # ── 构造训练命令 ──────────────────────────────────────────────────────────────
 cd backend
 
-CMD="python -u train_augmented.py \
+CMD="$VENV_PYTHON -u train_augmented.py \
   --data-path   ../data/stonefly_combined_data_augmented.csv \
   --output-dir  saved_models_augmented \
   --viz-dir     visualizations_augmented \
@@ -101,11 +105,14 @@ CMD="python -u train_augmented.py \
   --rf-max-depth ${RF_MAX_DEPTH:-30} \
   --rf-jobs     ${RF_JOBS:-8} \
   --svm-cap     ${SVM_CAP:-30000} \
-  --knn-cap     ${KNN_CAP:-50000}"
+  --knn-cap     ${KNN_CAP:-50000} \
+  --hierarchical-cap ${HIER_CAP:-80000} \
+  --hierarchical-jobs ${HIER_JOBS:-4}"
 
 # 可选跳过慢模型
 [ "${SKIP_SVM:-0}" = "1" ] && CMD="$CMD --skip-svm"
 [ "${SKIP_KNN:-0}" = "1" ] && CMD="$CMD --skip-knn"
+[ "${SKIP_HIER:-0}" = "1" ] && CMD="$CMD --skip-hierarchical"
 
 echo ""
 echo "执行命令: $CMD"
@@ -119,7 +126,7 @@ echo "输出目录: backend/saved_models_augmented/"
 echo ""
 echo "评估结果摘要:"
 if [ -f "saved_models_augmented/model_evaluation_report.json" ]; then
-  python -c "
+  "$VENV_PYTHON" -c "
 import json, sys
 r = json.load(open('saved_models_augmented/model_evaluation_report.json'))
 ev = r['evaluation_results']
@@ -129,6 +136,19 @@ for name, res in ev.items():
     t3 = f\"{res['top3_accuracy']:.4f}\" if res.get('top3_accuracy') else '  N/A'
     t5 = f\"{res['top5_accuracy']:.4f}\" if res.get('top5_accuracy') else '  N/A'
     print(f\"{name:<16} {res['top1_accuracy']:>7.4f} {t3:>7} {t5:>7} {res['f1_macro']:>9.4f}\")
+"
+fi
+if [ -f "saved_models_augmented/hierarchical_results.json" ]; then
+  echo ""
+  echo "层级模型结果摘要:"
+  "$VENV_PYTHON" -c "
+import json
+r = json.load(open('saved_models_augmented/hierarchical_results.json'))
+m = r['metrics']
+print(f\"Family Top-1: {m['family_accuracy']:.4f}\")
+print(f\"Species Top-1: {m['hierarchical_species_accuracy']:.4f}\")
+print(f\"Species Top-4: {m['hierarchical_species_top_4_accuracy']:.4f}\")
+print(f\"Oracle Top-1 : {m['oracle_family_species_accuracy']:.4f}\")
 "
 fi
 echo "========================================================"

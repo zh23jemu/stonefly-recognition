@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # 冒烟测试脚本 — 验证训练流程不报错（缩小参数，约 10-20 分钟）
-# 只跑 XGBoost + RF，跳过 SVM 和 KNN
+# 只跑 XGBoost + RF，并显式验证增强版层级模型链路
 #
 # 提交：sbatch scripts/slurm_train_augmented_smoke.sbatch
 # 或本地: bash scripts/slurm_train_augmented_smoke.sbatch
@@ -40,9 +40,10 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 if [ ! -d ".venv" ]; then
   "$PYTHON_BIN" -m venv .venv
 fi
-source .venv/bin/activate
-pip install --upgrade pip -q
-pip install -r backend/requirements.txt -q
+VENV_PYTHON="$REPO_ROOT/.venv/bin/python"
+VENV_PIP="$REPO_ROOT/.venv/bin/pip"
+"$VENV_PIP" install --upgrade pip -q
+"$VENV_PIP" install -r backend/requirements.txt -q
 
 NCPU="${SLURM_CPUS_PER_TASK:-8}"
 export OMP_NUM_THREADS="$NCPU"
@@ -51,7 +52,7 @@ export OPENBLAS_NUM_THREADS="$NCPU"
 
 cd backend
 
-PYTHONUNBUFFERED=1 python -u train_augmented.py \
+PYTHONUNBUFFERED=1 "$VENV_PYTHON" -u train_augmented.py \
   --data-path   ../data/stonefly_combined_data_augmented.csv \
   --output-dir  saved_models_augmented_smoke \
   --viz-dir     visualizations_augmented_smoke \
@@ -63,9 +64,22 @@ PYTHONUNBUFFERED=1 python -u train_augmented.py \
   --rf-cap      30000 \
   --rf-max-depth 25 \
   --rf-jobs     4 \
+  --hierarchical-cap 30000 \
+  --hierarchical-jobs 4 \
   --skip-svm \
   --skip-knn
 
 echo ""
 echo "冒烟测试完成: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "结果目录: backend/saved_models_augmented_smoke/"
+if [ -f "saved_models_augmented_smoke/hierarchical_results.json" ]; then
+  echo "层级模型结果摘要:"
+  "$VENV_PYTHON" -c "
+import json
+r = json.load(open('saved_models_augmented_smoke/hierarchical_results.json'))
+m = r['metrics']
+print(f\"Family Top-1: {m['family_accuracy']:.4f}\")
+print(f\"Species Top-1: {m['hierarchical_species_accuracy']:.4f}\")
+print(f\"Species Top-4: {m['hierarchical_species_top_4_accuracy']:.4f}\")
+"
+fi
