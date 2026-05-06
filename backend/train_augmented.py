@@ -142,6 +142,8 @@ def parse_args():
                    help="SVM 最大训练样本数")
     p.add_argument("--knn-cap",     type=int, default=50000,
                    help="KNN 最大训练样本数")
+    p.add_argument("--target", default="species", choices=["species", "family"],
+                   help="预测目标：species（默认）或 family（16 科分类）")
     p.add_argument("--skip-hierarchical", action="store_true",
                    help="跳过增强数据集的 family -> species 层级模型训练")
     p.add_argument("--hierarchical-cap", type=int, default=80000,
@@ -157,8 +159,19 @@ def main():
     os.makedirs(args.viz_dir,   exist_ok=True)
     seed = args.seed
 
+    # ── 根据 --target 动态调整目标和特征列 ────────────────────────────────────
+    target = args.target
+    if target == "family":
+        # 预测科时，family 本身是标签，必须从特征列中剔除
+        features = [f for f in get_flat_model_feature_columns() if f != "family"]
+        min_count = 10          # 16 个科，每科数千条，无需过滤
+        args.skip_hierarchical = True   # 科级预测不需要层级模型
+    else:
+        features = get_flat_model_feature_columns()
+        min_count = MIN_SPECIES_COUNT
+
     log("=" * 60)
-    log("石蝇分类系统 — 增强数据集训练（4 基础模型）")
+    log(f"石蝇分类系统 — 增强数据集训练（目标: {target}）")
     log("=" * 60)
 
     # ── 1. 加载数据 ────────────────────────────────────────────────────────────
@@ -168,19 +181,19 @@ def main():
     log(f"  原始行数: {len(df)}  列数: {len(df.columns)}")
 
     # 只保留目标列和特征列
-    keep_cols = FEATURES + [TARGET]
+    keep_cols = features + [target]
     df = df[[c for c in keep_cols if c in df.columns]].copy()
-    log(f"  训练特征: {', '.join(FEATURES)}")
+    log(f"  训练特征: {', '.join(features)}")
 
-    # 过滤极低频物种
-    counts = df[TARGET].value_counts()
-    valid  = counts[counts >= MIN_SPECIES_COUNT].index
-    df     = df[df[TARGET].isin(valid)].reset_index(drop=True)
-    log(f"  过滤后行数: {len(df)}  物种数: {df[TARGET].nunique()}")
+    # 过滤极低频类别
+    counts = df[target].value_counts()
+    valid  = counts[counts >= min_count].index
+    df     = df[df[target].isin(valid)].reset_index(drop=True)
+    log(f"  过滤后行数: {len(df)}  类别数: {df[target].nunique()}")
 
     # ── 2. 数据划分 ────────────────────────────────────────────────────────────
     log("分层划分训练/测试/验证集 (70/15/15)...")
-    y_all = df[TARGET].to_numpy()
+    y_all = df[target].to_numpy()
 
     # 先拆出 30% holdout
     spl1 = StratifiedShuffleSplit(n_splits=1, test_size=0.30, random_state=seed)
@@ -189,7 +202,7 @@ def main():
     df_holdout = df.iloc[holdout_idx].reset_index(drop=True)
 
     # holdout 一分为二：test / validation
-    y_holdout = df_holdout[TARGET].to_numpy()
+    y_holdout = df_holdout[target].to_numpy()
     spl2 = StratifiedShuffleSplit(n_splits=1, test_size=0.50, random_state=seed)
     test_idx, val_idx = next(spl2.split(np.zeros(len(y_holdout)), y_holdout))
     df_test = df_holdout.iloc[test_idx].reset_index(drop=True)
@@ -200,9 +213,9 @@ def main():
     # ── 3. 预处理 ──────────────────────────────────────────────────────────────
     log("拟合预处理器（仅在训练集上）...")
     preprocessor = DataPreprocessor()
-    X_train_full, y_train, _ = preprocessor.preprocess_pipeline(df_train, TARGET)
-    X_test_full,  y_test,  _ = preprocessor.transform_pipeline(df_test,  TARGET)
-    X_val_full,   y_val,   _ = preprocessor.transform_pipeline(df_val,   TARGET)
+    X_train_full, y_train, _ = preprocessor.preprocess_pipeline(df_train, target)
+    X_test_full,  y_test,  _ = preprocessor.transform_pipeline(df_test,  target)
+    X_val_full,   y_val,   _ = preprocessor.transform_pipeline(df_val,   target)
 
     # DataFrame → numpy（XGBoost / SVM / KNN 都接受 numpy）
     X_train_np = X_train_full.to_numpy(dtype=np.float32)
@@ -218,21 +231,22 @@ def main():
              X_test=X_test_np, y_test=y_test)
     np.savez(os.path.join(args.output_dir, "validation_data.npz"),
              X_validation=X_val_np, y_validation=y_val)
-    validation_records = df_val[FEATURES + [TARGET]].to_dict(orient="records")
+    validation_records = df_val[features + [target]].to_dict(orient="records")
     with open(os.path.join(args.output_dir, "validation_samples.json"), "w", encoding="utf-8") as f:
         json.dump(validation_records, f, ensure_ascii=False, indent=2)
 
     # 元信息
     meta = {
         "data_path":          args.data_path,
-        "n_species":          int(df[TARGET].nunique()),
+        "target":             target,
+        "n_classes":          int(df[target].nunique()),
         "train_samples":      len(X_train_np),
         "test_samples":       len(X_test_np),
         "val_samples":        len(X_val_np),
         "features":           list(X_train_full.columns),
-        "raw_feature_columns": FEATURES,
+        "raw_feature_columns": features,
         "n_features":         X_train_np.shape[1],
-        "min_species_count":  MIN_SPECIES_COUNT,
+        "min_count_filter":   min_count,
         "seed":               seed,
         "timestamp":          datetime.now().isoformat(),
     }

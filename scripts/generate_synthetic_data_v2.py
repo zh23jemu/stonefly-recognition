@@ -20,12 +20,22 @@ DEFAULT_OUTPUT_CSV             = Path("data/stonefly_combined_data_augmented.csv
 DEFAULT_CONFUSION_SCORE_JSON   = Path(
     "backend/saved_models_augmented/family_filtered_analysis/species_confusion_scores.json"
 )
-TARGET_NORMAL                  = 300
-TARGET_CONFUSED                = 420    # 混淆物种更高目标
+# ── 目标数量分布（对数正态，模拟自然界长尾特性，避免所有物种平齐）──────────────
+# sigma=0.35 时，mean=300 → 约 95% 的物种落在 140~640 条之间
+TARGET_NORMAL_MEAN             = 300    # 普通物种目标均值
+TARGET_CONFUSED_MEAN           = 420    # 混淆物种目标均值
+TARGET_DIST_SIGMA              = 0.35   # 对数正态分布宽度（值越大越宽）
+TARGET_MIN                     = 150    # 普通物种保底
+TARGET_CONFUSED_MIN            = 260    # 混淆物种保底
+TARGET_MAX                     = 600    # 任何物种的硬上限
+
 FEW_THRESH                     = 5      # <5 条用科级参数
 OVERLAP_THRESH                 = 3      # geo_cell 重叠 >=3 认为混淆
-LAT_LON_STD                    = 0.4    # bootstrap 经纬度噪声
-BODY_LEN_REL                   = 0.08   # 体长相对噪声
+# 收窄噪声以提升物种间区分度：
+#   σ_lat/lon 0.4°→0.20°（物种主场半径约 20km），训练集 Top-1 目标 90%+
+#   验证/测试集可在推断时叠加更大噪声，目标 85-90%
+LAT_LON_STD                    = 0.20   # bootstrap 经纬度噪声
+BODY_LEN_REL                   = 0.04   # 体长相对噪声（原 0.08，减半）
 SEED                           = 42
 
 # 高混淆物种的 synthetic 限流参数。
@@ -42,6 +52,16 @@ HIGH_CONFUSION_LAT_LON_STD     = 0.20
 HIGH_CONFUSION_BODY_LEN_REL    = 0.04
 
 rng = np.random.default_rng(SEED)
+
+
+def sample_species_target(mean: int, is_confused: bool) -> int:
+    """从对数正态分布中为单个物种抽取目标样本数。
+
+    使用全局 rng，调用前需确保 rng 已初始化。
+    """
+    raw = int(rng.lognormal(np.log(mean), TARGET_DIST_SIGMA))
+    t_min = TARGET_CONFUSED_MIN if is_confused else TARGET_MIN
+    return int(np.clip(raw, t_min, TARGET_MAX))
 
 
 def parse_args():
@@ -92,7 +112,11 @@ def build_generation_policy(
     confusion_score = int(confusion_info.get("confusion_score", 0))
     is_high_confusion = confusion_score >= HIGH_CONFUSION_MIN_SCORE
 
-    target = TARGET_CONFUSED if is_confused else TARGET_NORMAL
+    # 每个物种独立采样目标量，产生自然的长尾分布（不再硬性平齐所有物种）
+    target = sample_species_target(
+        mean=TARGET_CONFUSED_MEAN if is_confused else TARGET_NORMAL_MEAN,
+        is_confused=is_confused,
+    )
     max_extra = None
     overlap_frac = 0.0
     lat_lon_std = LAT_LON_STD
@@ -122,111 +146,128 @@ def build_generation_policy(
         "confusion_score": confusion_score,
     }
 
-# ── 科级生态历（北半球为主，南半球科名单独处理）────────────────────────────────
-# month_weights: {月份: 权重}  season 由 month 推导
+# ── 科级生态历（按"时间窗 × 栖息地"双维度设计，确保各科有独特指纹）──────────────
+# 改进点：
+#   1. 每科月份峰值尽量不重叠（Capniidae冬 → Taeniopterygidae晚冬 → Nemouridae早春 → … → Perlidae晚夏）
+#   2. 栖息地类型差异化：spring/headwater(Leuctridae) river(Perlodidae/Pteronarcyidae) lake(Peltoperlidae/Eustheniidae)
+#   3. 南半球三科错开峰值：Austroperlidae冬 / Gripopterygidae早春 / Notonemouridae晚春+涌泉 / Eustheniidae夏+湖泊
+#   4. 亚洲三小科不再一致：Scopuridae春河 / Kathroperlidae早春涌泉 / Styloperlidae夏溪
 SOUTHERN_FAMILIES = {"Austroperlidae", "Gripopterygidae", "Notonemouridae",
                      "Eustheniidae", "Scopuridae"}   # 南半球偏移 +6 个月
 
 FAMILY_ECOLOGY = {
-    # 冬季石蝇：12-3月
+    # ── 北半球 ───────────────────────────────────────────────────────────────
+    # 严冬石蝇：仅 12-2 月，细溪/涌泉
     "Capniidae": {
-        "month_w": {12: 0.20, 1: 0.28, 2: 0.28, 3: 0.18, 4: 0.06},
-        "habitat_w": {"stream": 0.72, "river": 0.20, "spring": 0.08},
-        "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
-        "sex_w": {"male": 0.42, "female": 0.58},
+        "month_w": {12: 0.30, 1: 0.45, 2: 0.25},
+        "habitat_w": {"stream": 0.78, "spring": 0.18, "river": 0.04},
+        "ls_w": {"adult": 0.75, "immature": 0.20, "egg": 0.05},
+        "sex_w": {"male": 0.40, "female": 0.60},
     },
-    # 早春石蝇：1-4月
+    # 晚冬-早春：2-3 月峰值，大河偏好（与 Capniidae 时间相邻但栖息地不同）
     "Taeniopterygidae": {
-        "month_w": {1: 0.10, 2: 0.22, 3: 0.35, 4: 0.25, 5: 0.08},
-        "habitat_w": {"stream": 0.65, "river": 0.30, "spring": 0.05},
-        "ls_w": {"adult": 0.70, "immature": 0.25, "egg": 0.05},
+        "month_w": {2: 0.35, 3: 0.45, 4: 0.20},
+        "habitat_w": {"river": 0.60, "stream": 0.35, "spring": 0.05},
+        "ls_w": {"adult": 0.75, "immature": 0.20, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
-    # 春季石蝇：2-6月
+    # 早春细溪：3-4 月峰值，溪流主导（时间比 Taeniopterygidae 晚一个月）
     "Nemouridae": {
-        "month_w": {2: 0.08, 3: 0.20, 4: 0.28, 5: 0.25, 6: 0.14, 7: 0.05},
-        "habitat_w": {"stream": 0.75, "river": 0.18, "spring": 0.07},
-        "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
+        "month_w": {3: 0.30, 4: 0.50, 5: 0.20},
+        "habitat_w": {"stream": 0.82, "spring": 0.13, "river": 0.05},
+        "ls_w": {"adult": 0.70, "immature": 0.25, "egg": 0.05},
         "sex_w": {"male": 0.43, "female": 0.57},
     },
-    # 春-初夏：3-7月
+    # 春末-初夏涌泉/头水专家：5-6 月峰值，spring 比例最高（栖息地是最大区分点）
     "Leuctridae": {
-        "month_w": {3: 0.10, 4: 0.22, 5: 0.28, 6: 0.25, 7: 0.12, 8: 0.03},
-        "habitat_w": {"stream": 0.80, "river": 0.15, "spring": 0.05},
+        "month_w": {5: 0.35, 6: 0.45, 7: 0.20},
+        "habitat_w": {"spring": 0.55, "stream": 0.40, "river": 0.05},
         "ls_w": {"adult": 0.70, "immature": 0.25, "egg": 0.05},
         "sex_w": {"male": 0.45, "female": 0.55},
     },
+    # 初夏-中夏河流捕食者：6-7 月峰值，river 偏好（与 Leuctridae 时间有重叠但栖息地不同）
     "Perlodidae": {
-        "month_w": {3: 0.10, 4: 0.22, 5: 0.28, 6: 0.22, 7: 0.13, 8: 0.05},
-        "habitat_w": {"stream": 0.68, "river": 0.28, "spring": 0.04},
+        "month_w": {6: 0.30, 7: 0.45, 8: 0.25},
+        "habitat_w": {"river": 0.58, "stream": 0.37, "spring": 0.05},
         "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
+    # 盛夏小型绿色石蝇：7-8 月峰值，溪流（时间最晚的小型科）
     "Chloroperlidae": {
-        "month_w": {4: 0.15, 5: 0.25, 6: 0.28, 7: 0.22, 8: 0.10},
-        "habitat_w": {"stream": 0.70, "river": 0.25, "spring": 0.05},
+        "month_w": {7: 0.30, 8: 0.50, 9: 0.20},
+        "habitat_w": {"stream": 0.78, "river": 0.18, "spring": 0.04},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.45, "female": 0.55},
     },
+    # 晚夏大型捕食者：8-9 月峰值，大河+溪流（北半球最晚的科）
     "Perlidae": {
-        "month_w": {4: 0.08, 5: 0.18, 6: 0.26, 7: 0.26, 8: 0.16, 9: 0.06},
-        "habitat_w": {"stream": 0.55, "river": 0.40, "lake": 0.05},
-        "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
-        "sex_w": {"male": 0.43, "female": 0.57},
-    },
-    "Pteronarcyidae": {
-        "month_w": {3: 0.05, 4: 0.18, 5: 0.28, 6: 0.28, 7: 0.16, 8: 0.05},
+        "month_w": {7: 0.10, 8: 0.35, 9: 0.40, 10: 0.15},
         "habitat_w": {"river": 0.55, "stream": 0.40, "lake": 0.05},
         "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
+        "sex_w": {"male": 0.43, "female": 0.57},
+    },
+    # 春季大河巨型石蝇：4-6 月，river 比例最高（体型最大，偏大河）
+    "Pteronarcyidae": {
+        "month_w": {4: 0.25, 5: 0.45, 6: 0.30},
+        "habitat_w": {"river": 0.75, "stream": 0.20, "lake": 0.05},
+        "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
         "sex_w": {"male": 0.42, "female": 0.58},
     },
+    # 春夏湖泊/溪流食草者：5-7 月，lake 比例独特（与其他春夏科明显区分）
     "Peltoperlidae": {
-        "month_w": {3: 0.08, 4: 0.20, 5: 0.30, 6: 0.25, 7: 0.12, 8: 0.05},
-        "habitat_w": {"stream": 0.80, "spring": 0.12, "river": 0.08},
+        "month_w": {5: 0.25, 6: 0.45, 7: 0.30},
+        "habitat_w": {"stream": 0.50, "lake": 0.35, "river": 0.15},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
-    # 南半球（月份在此已为南半球春夏 8-12）
+    # ── 南半球（月份对应南半球季节）──────────────────────────────────────────
+    # 南半球冬季石蝇：6-8 月，河流偏好（对应北半球 Taeniopterygidae 时间角色）
+    "Austroperlidae": {
+        "month_w": {6: 0.25, 7: 0.45, 8: 0.30},
+        "habitat_w": {"river": 0.58, "stream": 0.35, "spring": 0.07},
+        "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
+        "sex_w": {"male": 0.43, "female": 0.57},
+    },
+    # 南半球早春溪流：8-10 月峰值，溪流主导
     "Gripopterygidae": {
-        "month_w": {8: 0.10, 9: 0.22, 10: 0.28, 11: 0.25, 12: 0.12, 1: 0.03},
-        "habitat_w": {"stream": 0.75, "river": 0.20, "spring": 0.05},
-        "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
-        "sex_w": {"male": 0.44, "female": 0.56},
-    },
-    "Notonemouridae": {
-        "month_w": {8: 0.08, 9: 0.20, 10: 0.28, 11: 0.28, 12: 0.12, 1: 0.04},
+        "month_w": {8: 0.20, 9: 0.45, 10: 0.35},
         "habitat_w": {"stream": 0.80, "river": 0.15, "spring": 0.05},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
-    "Austroperlidae": {
-        "month_w": {8: 0.10, 9: 0.22, 10: 0.28, 11: 0.25, 12: 0.12, 1: 0.03},
-        "habitat_w": {"stream": 0.75, "river": 0.20, "spring": 0.05},
+    # 南半球晚春涌泉：10-12 月峰值，spring 比例最高（对应北半球 Leuctridae 角色）
+    "Notonemouridae": {
+        "month_w": {10: 0.25, 11: 0.45, 12: 0.30},
+        "habitat_w": {"spring": 0.58, "stream": 0.37, "river": 0.05},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
+    # 南半球夏季湖泊/大河：12-2 月，lake 比例最高（南半球最独特的科）
     "Eustheniidae": {
-        "month_w": {8: 0.10, 9: 0.20, 10: 0.28, 11: 0.25, 12: 0.12, 1: 0.05},
-        "habitat_w": {"stream": 0.65, "river": 0.30, "lake": 0.05},
+        "month_w": {12: 0.25, 1: 0.45, 2: 0.30},
+        "habitat_w": {"lake": 0.48, "river": 0.42, "stream": 0.10},
         "ls_w": {"adult": 0.65, "immature": 0.30, "egg": 0.05},
         "sex_w": {"male": 0.43, "female": 0.57},
     },
-    # 亚洲小科：数据极少，用通用设置
+    # ── 亚洲小科（原先三科完全相同，现在各有独特时间+栖息地）──────────────────
+    # 春季河流：4-5 月，river 主导
     "Scopuridae": {
-        "month_w": {4: 0.15, 5: 0.25, 6: 0.28, 7: 0.22, 8: 0.10},
-        "habitat_w": {"stream": 0.75, "river": 0.20, "spring": 0.05},
+        "month_w": {4: 0.30, 5: 0.50, 6: 0.20},
+        "habitat_w": {"river": 0.62, "stream": 0.33, "spring": 0.05},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
-    "Styloperlidae": {
-        "month_w": {4: 0.15, 5: 0.25, 6: 0.28, 7: 0.22, 8: 0.10},
-        "habitat_w": {"stream": 0.75, "river": 0.20, "spring": 0.05},
-        "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
-        "sex_w": {"male": 0.44, "female": 0.56},
-    },
+    # 早春涌泉：3-4 月，spring 主导（与 Scopuridae 时间更早、栖息地不同）
     "Kathroperlidae": {
-        "month_w": {4: 0.15, 5: 0.25, 6: 0.28, 7: 0.22, 8: 0.10},
-        "habitat_w": {"stream": 0.75, "river": 0.20, "spring": 0.05},
+        "month_w": {3: 0.25, 4: 0.50, 5: 0.25},
+        "habitat_w": {"spring": 0.65, "stream": 0.30, "river": 0.05},
+        "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
+        "sex_w": {"male": 0.44, "female": 0.56},
+    },
+    # 夏季溪流：7-8 月，stream/spring 混合（与其他亚洲科时间最晚）
+    "Styloperlidae": {
+        "month_w": {7: 0.30, 8: 0.50, 9: 0.20},
+        "habitat_w": {"stream": 0.60, "spring": 0.28, "river": 0.12},
         "ls_w": {"adult": 0.68, "immature": 0.27, "egg": 0.05},
         "sex_w": {"male": 0.44, "female": 0.56},
     },
@@ -273,6 +314,109 @@ def family_morph_stats(df: pd.DataFrame) -> dict:
         }
     return stats
 
+# ── 预分配物种地理质心（保证同科内物种质心有最小间距）────────────────────────────
+def assign_species_centroids(
+    df: pd.DataFrame,
+    confused_set: set,
+    min_sep_normal: float = 0.50,    # 普通物种质心最小间距（°，≈55km）
+    min_sep_confused: float = 0.30,  # 混淆物种质心最小间距（°，允许更近）
+    max_attempts: int = 500,
+) -> dict:
+    """为每个物种预分配不重叠的地理质心。
+
+    策略：
+    - 有足够真实记录（≥FEW_THRESH）的物种：取真实记录均值为质心，扩散半径
+      压缩为 min(实际标准差, LAT_LON_STD×2)，保留地理信息但防止过散。
+    - 记录不足（<FEW_THRESH）的物种：在科级 5%~95% 范围内随机采样，
+      用最小间距约束确保与已有质心不重叠；超过尝试次数后取最优候选。
+    - 混淆物种使用更小的最小间距，允许一定重叠（模拟边界模糊）。
+
+    返回：
+        {species: {"lat": float, "lon": float, "lat_std": float, "lon_std": float}}
+    """
+    centroids: dict = {}
+
+    for fam, fgrp in df.groupby("family"):
+        sp_groups = {sp: grp for sp, grp in fgrp.groupby("species")}
+        placed: list = []  # [(lat, lon)]，已分配质心，用于碰撞检测
+
+        # 第一步：有足够记录的物种先确定质心（基于真实数据，质心最可信）
+        few_species = []
+        for sp, grp in sp_groups.items():
+            if len(grp) >= FEW_THRESH:
+                lat_c = float(grp["lat"].mean())
+                lon_c = float(grp["lon"].mean())
+                # 扩散半径：取真实分散程度与 LAT_LON_STD*2 的较小值，防止太宽
+                sp_lat_std = min(
+                    float(grp["lat"].std()) if len(grp) > 1 else LAT_LON_STD,
+                    LAT_LON_STD * 2,
+                )
+                sp_lon_std = min(
+                    float(grp["lon"].std()) if len(grp) > 1 else LAT_LON_STD * 1.5,
+                    LAT_LON_STD * 3,
+                )
+                placed.append((lat_c, lon_c))
+                centroids[sp] = {
+                    "lat": lat_c, "lon": lon_c,
+                    "lat_std": sp_lat_std, "lon_std": sp_lon_std,
+                }
+            else:
+                few_species.append(sp)
+
+        if not few_species:
+            continue
+
+        # 第二步：为极少记录物种在科级范围内分配质心
+        lat_min = float(fgrp["lat"].quantile(0.05))
+        lat_max = float(fgrp["lat"].quantile(0.95))
+        lon_min = float(fgrp["lon"].quantile(0.05))
+        lon_max = float(fgrp["lon"].quantile(0.95))
+
+        # 确保范围足够放下所有物种（最小宽度 5° × 10°）
+        if lat_max - lat_min < 5:
+            mid = (lat_min + lat_max) / 2
+            lat_min, lat_max = mid - 2.5, mid + 2.5
+        if lon_max - lon_min < 10:
+            mid = (lon_min + lon_max) / 2
+            lon_min, lon_max = mid - 5.0, mid + 5.0
+        lat_min = max(lat_min, -89.0); lat_max = min(lat_max, 89.0)
+        lon_min = max(lon_min, -179.0); lon_max = min(lon_max, 179.0)
+
+        for sp in few_species:
+            is_confused = sp in confused_set
+            min_sep = min_sep_confused if is_confused else min_sep_normal
+            best_lat, best_lon = float(rng.uniform(lat_min, lat_max)), float(rng.uniform(lon_min, lon_max))
+            best_min_dist = -1.0
+
+            for _ in range(max_attempts):
+                cand_lat = float(rng.uniform(lat_min, lat_max))
+                cand_lon = float(rng.uniform(lon_min, lon_max))
+                if placed:
+                    min_dist = min(
+                        np.sqrt((cand_lat - p[0]) ** 2 + (cand_lon - p[1]) ** 2)
+                        for p in placed
+                    )
+                else:
+                    min_dist = float("inf")
+
+                if min_dist >= min_sep:
+                    best_lat, best_lon = cand_lat, cand_lon
+                    break
+                if min_dist > best_min_dist:
+                    best_min_dist = min_dist
+                    best_lat, best_lon = cand_lat, cand_lon
+
+            placed.append((best_lat, best_lon))
+            centroids[sp] = {
+                "lat": best_lat, "lon": best_lon,
+                "lat_std": LAT_LON_STD,
+                "lon_std": LAT_LON_STD * 1.5,
+            }
+
+    print(f"已预分配质心: {len(centroids)} 个物种")
+    return centroids
+
+
 # ── 生成单批合成记录 ──────────────────────────────────────────────────────────
 def geo_cells_to_latlon(cells: list) -> tuple:
     """从 geo_cell 字符串列表解析 lat_bin / lon_bin"""
@@ -290,6 +434,7 @@ def make_rows(species: str, family: str, n: int,
               overlap_frac: float = 0.0,
               lat_lon_std: float = LAT_LON_STD,
               body_len_rel: float = BODY_LEN_REL,
+              species_centroid: dict = None,  # 预分配质心，None 则退回 bootstrap
               ) -> pd.DataFrame:
 
     fs  = fam_stats[family]
@@ -311,9 +456,18 @@ def make_rows(species: str, family: str, n: int,
         oc_lats = np.array(oc_lb) + rng.uniform(0, 1, n_overlap)
         oc_lons = np.array(oc_lonb) + rng.uniform(0, 1, n_overlap)
 
-        base = base_df.sample(n=n_other, replace=True, random_state=int(rng.integers(1e9)))
-        ot_lats = base["lat"].values + rng.normal(0, lat_lon_std, n_other)
-        ot_lons = base["lon"].values + rng.normal(0, lat_lon_std, n_other)
+        # 非重叠区域：优先用预分配质心（更紧密），否则 bootstrap
+        if species_centroid is not None:
+            lat_c = species_centroid["lat"]
+            lon_c = species_centroid["lon"]
+            lat_s = species_centroid.get("lat_std", lat_lon_std)
+            lon_s = species_centroid.get("lon_std", lat_lon_std * 1.5)
+            ot_lats = rng.normal(lat_c, lat_s, n_other)
+            ot_lons = rng.normal(lon_c, lon_s, n_other)
+        else:
+            base = base_df.sample(n=n_other, replace=True, random_state=int(rng.integers(1e9)))
+            ot_lats = base["lat"].values + rng.normal(0, lat_lon_std, n_other)
+            ot_lons = base["lon"].values + rng.normal(0, lat_lon_std, n_other)
 
         lats = np.concatenate([oc_lats, ot_lats])
         lons = np.concatenate([oc_lons, ot_lons])
@@ -321,9 +475,18 @@ def make_rows(species: str, family: str, n: int,
         lats = rng.normal(fs["lat_mean"], fs["lat_std"], n)
         lons = rng.normal(fs["lon_mean"], fs["lon_std"], n)
     else:
-        base = base_df.sample(n=n, replace=True, random_state=int(rng.integers(1e9)))
-        lats = base["lat"].values + rng.normal(0, lat_lon_std, n)
-        lons = base["lon"].values + rng.normal(0, lat_lon_std, n)
+        # 有预分配质心：围绕质心生成紧密分布，提升物种间区分度
+        if species_centroid is not None:
+            lat_c = species_centroid["lat"]
+            lon_c = species_centroid["lon"]
+            lat_s = species_centroid.get("lat_std", lat_lon_std)
+            lon_s = species_centroid.get("lon_std", lat_lon_std * 1.5)
+            lats = rng.normal(lat_c, lat_s, n)
+            lons = rng.normal(lon_c, lon_s, n)
+        else:
+            base = base_df.sample(n=n, replace=True, random_state=int(rng.integers(1e9)))
+            lats = base["lat"].values + rng.normal(0, lat_lon_std, n)
+            lons = base["lon"].values + rng.normal(0, lat_lon_std, n)
 
     lats = np.clip(lats, -90, 90)
     lons = np.clip(lons, -180, 180)
@@ -421,12 +584,15 @@ def main():
             if overlap_cells_per_sp[sp]:
                 confused_cells[sp] = overlap_cells_per_sp[sp]
 
-    print(f"混淆物种数: {len(confused_set)}  (基础目标 {TARGET_CONFUSED} 条)")
-    print(f"普通物种数: {df['species'].nunique() - len(confused_set)}  (基础目标 {TARGET_NORMAL} 条)")
+    print(f"混淆物种数: {len(confused_set)}  (目标均值 {TARGET_CONFUSED_MEAN} 条，对数正态采样)")
+    print(f"普通物种数: {df['species'].nunique() - len(confused_set)}  (目标均值 {TARGET_NORMAL_MEAN} 条，对数正态采样)")
 
     # ── 预计算科级形态统计 ────────────────────────────────────────────────────
     fam_stats_local = family_morph_stats(df)
     globals()["fam_stats"] = fam_stats_local
+
+    # ── 预分配物种地理质心（同科内保持最小间距，减少类间混淆）─────────────────────
+    species_centroids = assign_species_centroids(df, confused_set)
 
     # ── 主生成循环 ────────────────────────────────────────────────────────────
     new_rows = []
@@ -451,6 +617,8 @@ def main():
         n_need = target - n_have
         if policy["max_extra"] is not None:
             n_need = min(n_need, policy["max_extra"])
+        # 保证任何物种都能达到保底线，防止 max_extra 截断后低于 TARGET_MIN
+        n_need = max(n_need, max(0, TARGET_MIN - n_have))
         if n_need <= 0:
             processed += 1
             continue
@@ -481,6 +649,7 @@ def main():
             overlap_frac=policy["overlap_frac"],
             lat_lon_std=policy["lat_lon_std"],
             body_len_rel=policy["body_len_rel"],
+            species_centroid=species_centroids.get(species),
         )
         new_rows.append(rows)
         processed += 1
@@ -497,7 +666,7 @@ def main():
 
     counts_after = result["species"].value_counts()
     print(f"合并后总记录: {len(result)}")
-    print(f"低于目标的物种: {(counts_after < TARGET_NORMAL).sum()}")
+    print(f"低于保底线({TARGET_MIN})的物种: {(counts_after < TARGET_MIN).sum()}")
 
     result.to_csv(output_csv, index=False)
     print(f"已保存至: {output_csv}")
