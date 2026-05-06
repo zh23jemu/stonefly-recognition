@@ -10,6 +10,11 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from xgboost import XGBClassifier
 
+from .augmented_feature_utils import (
+    NUMERIC_FEATURE_CANDIDATES,
+    prepare_augmented_dataframe,
+)
+
 
 UNKNOWN_CATEGORY = "__UNKNOWN__"
 UNKNOWN_SPECIES = "Unknown Stonefly"
@@ -43,10 +48,14 @@ class HierarchicalFeaturePreprocessor:
     对未见过的分类值统一映射到 __UNKNOWN__，避免线上输入中断。
     """
 
-    def __init__(self):
-        self.feature_columns = HIERARCHICAL_FEATURES.copy()
-        self.numeric_features = NUMERIC_FEATURES.copy()
-        self.categorical_features = CATEGORICAL_FEATURES.copy()
+    def __init__(self, feature_columns=None):
+        self.feature_columns = feature_columns.copy() if feature_columns else HIERARCHICAL_FEATURES.copy()
+        self.numeric_features = [
+            col for col in self.feature_columns if col in NUMERIC_FEATURE_CANDIDATES
+        ]
+        self.categorical_features = [
+            col for col in self.feature_columns if col not in self.numeric_features
+        ]
         self.label_encoders = {}
         self.scaler = StandardScaler()
         self.missing_values = {}
@@ -104,6 +113,7 @@ def _prepare_known_species_dataset(data_path):
     指标可比较：Unknown Stonefly 不参与训练，少于 50 条样本的物种也不参与。
     """
     df = pd.read_csv(data_path, encoding="utf-8")
+    df = prepare_augmented_dataframe(df)
     counts = df["species"].value_counts()
     valid_species = counts[
         (counts >= MIN_SPECIES_COUNT) & (counts.index != UNKNOWN_SPECIES)
@@ -297,6 +307,7 @@ def train_hierarchical_models(
     max_train_samples=20000,
     random_state=42,
     n_jobs=2,
+    feature_columns=None,
 ):
     """训练 family -> species 两阶段层级模型，并保存全部线上预测资产。"""
     output_path = Path(output_dir)
@@ -305,14 +316,16 @@ def train_hierarchical_models(
     df, valid_species = _prepare_known_species_dataset(data_path)
     df_train, df_test, df_validation = _split_dataset(df, random_state)
     df_fit = _sample_training_frame(df_train, max_train_samples, random_state)
+    active_feature_columns = feature_columns.copy() if feature_columns else HIERARCHICAL_FEATURES.copy()
 
     print("\n【层级模型】准备训练数据...")
     print(f"  [OK] 层级模型样本数: {len(df)}")
     print(f"  [OK] 层级模型物种数: {len(valid_species)}")
     print(f"  [OK] 层级训练样本数: {len(df_fit)}")
     print(f"  [OK] 层级测试样本数: {len(df_test)}")
+    print(f"  [OK] 层级特征: {', '.join(active_feature_columns)}")
 
-    preprocessor = HierarchicalFeaturePreprocessor()
+    preprocessor = HierarchicalFeaturePreprocessor(active_feature_columns)
     X_train = preprocessor.fit_transform(df_fit)
     X_test = preprocessor.transform(df_test)
 
@@ -369,8 +382,8 @@ def train_hierarchical_models(
         "species_models": species_models,
         "fallback_species_by_family": fallback_species_by_family,
         "global_fallback_species": global_fallback_species,
-        "feature_columns": HIERARCHICAL_FEATURES,
-        "full_feature_columns": FULL_FEATURES,
+        "feature_columns": active_feature_columns,
+        "full_feature_columns": ["family"] + active_feature_columns,
         "skipped_families": skipped_families,
     }
 
@@ -405,7 +418,7 @@ def train_hierarchical_models(
         "species_model": "xgboost_by_family",
         "unknown_policy": "removed",
         "min_species_count": MIN_SPECIES_COUNT,
-        "features_used": HIERARCHICAL_FEATURES,
+        "features_used": active_feature_columns,
         "features_excluded_as_labels": ["family", "species"],
         "dataset": {
             "samples": int(len(df)),

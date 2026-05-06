@@ -1,9 +1,10 @@
 """
-增强数据集训练脚本（4 基础模型，无层级模型）
+增强数据集训练脚本（4 基础模型 + 可选层级模型）
 
-特征（11个）：
+模型特征（16个）：
   lat, lon, country, family, body_length_mm, color, head_feature,
-  month, habitat, sex, life_stage
+  month, habitat, sex, life_stage,
+  season, habitat_group, lat_bin, lon_bin, geo_cell
 
 目标：XGBoost Top-1 ≈90%，RF ≈82%，SVM/KNN 较低
 
@@ -37,17 +38,17 @@ from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 
 sys.path.insert(0, os.path.dirname(__file__))
+from ml.augmented_feature_utils import (
+    get_flat_model_feature_columns,
+    get_hierarchical_feature_columns,
+    prepare_augmented_dataframe,
+)
+from ml.hierarchical_training import train_hierarchical_models
 from ml.preprocessing import DataPreprocessor
 
 
 # ── 特征列表 ──────────────────────────────────────────────────────────────────
-FEATURES = [
-    "lat", "lon",
-    "country", "family",
-    "body_length_mm",
-    "color", "head_feature",
-    "month", "habitat", "sex", "life_stage",
-]
+FEATURES = get_flat_model_feature_columns()
 TARGET = "species"
 MIN_SPECIES_COUNT = 50   # 过滤极低频物种（增强数据集中实际全部 >=300）
 
@@ -141,6 +142,12 @@ def parse_args():
                    help="SVM 最大训练样本数")
     p.add_argument("--knn-cap",     type=int, default=50000,
                    help="KNN 最大训练样本数")
+    p.add_argument("--skip-hierarchical", action="store_true",
+                   help="跳过增强数据集的 family -> species 层级模型训练")
+    p.add_argument("--hierarchical-cap", type=int, default=80000,
+                   help="层级模型最大训练样本数，0 表示使用完整训练集")
+    p.add_argument("--hierarchical-jobs", type=int, default=4,
+                   help="层级模型 XGBoost 并行线程数")
     return p.parse_args()
 
 
@@ -157,14 +164,13 @@ def main():
     # ── 1. 加载数据 ────────────────────────────────────────────────────────────
     log(f"加载数据集: {args.data_path}")
     df = pd.read_csv(args.data_path, low_memory=False)
+    df = prepare_augmented_dataframe(df)
     log(f"  原始行数: {len(df)}  列数: {len(df.columns)}")
-
-    # month 列可能是 int/str 混合，统一转为字符串分类
-    df["month"] = df["month"].astype(str)
 
     # 只保留目标列和特征列
     keep_cols = FEATURES + [TARGET]
     df = df[[c for c in keep_cols if c in df.columns]].copy()
+    log(f"  训练特征: {', '.join(FEATURES)}")
 
     # 过滤极低频物种
     counts = df[TARGET].value_counts()
@@ -212,6 +218,9 @@ def main():
              X_test=X_test_np, y_test=y_test)
     np.savez(os.path.join(args.output_dir, "validation_data.npz"),
              X_validation=X_val_np, y_validation=y_val)
+    validation_records = df_val[FEATURES + [TARGET]].to_dict(orient="records")
+    with open(os.path.join(args.output_dir, "validation_samples.json"), "w", encoding="utf-8") as f:
+        json.dump(validation_records, f, ensure_ascii=False, indent=2)
 
     # 元信息
     meta = {
@@ -221,6 +230,7 @@ def main():
         "test_samples":       len(X_test_np),
         "val_samples":        len(X_val_np),
         "features":           list(X_train_full.columns),
+        "raw_feature_columns": FEATURES,
         "n_features":         X_train_np.shape[1],
         "min_species_count":  MIN_SPECIES_COUNT,
         "seed":               seed,
@@ -398,6 +408,26 @@ def main():
     report_path = os.path.join(args.output_dir, "model_evaluation_report.json")
     json.dump(report, open(report_path, "w"), indent=2, ensure_ascii=False)
     log(f"评估报告已保存: {report_path}")
+
+    # ── 9. 层级模型（用户手选 family 后的 species 预测）───────────────────────
+    if not args.skip_hierarchical:
+        log("\n" + "=" * 60)
+        log("开始训练增强数据集层级模型（family -> species）...")
+        hierarchical_results = train_hierarchical_models(
+            data_path=args.data_path,
+            output_dir=args.output_dir,
+            max_train_samples=args.hierarchical_cap,
+            random_state=seed,
+            n_jobs=args.hierarchical_jobs,
+            feature_columns=get_hierarchical_feature_columns(),
+        )
+        log(
+            "层级模型完成："
+            f"Top-1={hierarchical_results['metrics']['hierarchical_species_accuracy']:.4f}  "
+            f"Top-4={hierarchical_results['metrics']['hierarchical_species_top_4_accuracy']:.4f}"
+        )
+    else:
+        log("跳过层级模型（--skip-hierarchical）")
 
 
 if __name__ == "__main__":

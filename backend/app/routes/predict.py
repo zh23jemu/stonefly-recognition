@@ -4,15 +4,25 @@ import numpy as np
 import pandas as pd
 import os
 import json
+import sys
+from functools import lru_cache
 
 predict_bp = Blueprint("predict", __name__)
 
-BASE_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
-MODELS_DIR = os.path.join(BASE_DIR, "saved_models")
-PREPROCESSOR_PATH = os.path.join(MODELS_DIR, "preprocessor.pkl")
-LASSO_SELECTOR_PATH = os.path.join(MODELS_DIR, "lasso_selector.pkl")
-VALIDATION_SAMPLES_PATH = os.path.join(MODELS_DIR, "validation_samples.json")
-HIERARCHICAL_MODEL_PATH = os.path.join(MODELS_DIR, "hierarchical_model_bundle.pkl")
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from ml.augmented_feature_utils import (  # noqa: E402
+    ALL_AUGMENTED_MODEL_FEATURES,
+    BASE_AUGMENTED_FEATURES,
+    build_feature_frame_from_payload,
+)
+
+AUGMENTED_MODELS_DIR = os.path.join(BASE_DIR, "saved_models_augmented")
+LEGACY_MODELS_DIR = os.path.join(BASE_DIR, "saved_models")
+MODEL_DIR_CANDIDATES = [AUGMENTED_MODELS_DIR, LEGACY_MODELS_DIR]
+DATASET_PATH = os.path.join(BASE_DIR, "..", "data", "stonefly_combined_data_augmented.csv")
 
 MODEL_FILES = {
     "knn": "knn_model.pkl",
@@ -21,7 +31,7 @@ MODEL_FILES = {
     "xgboost": "xgboost_model.pkl",
 }
 
-REQUIRED_COLUMNS = [
+LEGACY_REQUIRED_COLUMNS = [
     "lat",
     "lon",
     "country",
@@ -30,8 +40,7 @@ REQUIRED_COLUMNS = [
     "color",
     "head_feature",
 ]
-
-HIERARCHICAL_INPUT_COLUMNS = [
+LEGACY_HIERARCHICAL_INPUT_COLUMNS = [
     "lat",
     "lon",
     "country",
@@ -39,6 +48,42 @@ HIERARCHICAL_INPUT_COLUMNS = [
     "color",
     "head_feature",
 ]
+VALIDATION_RESPONSE_COLUMNS = BASE_AUGMENTED_FEATURES.copy()
+
+
+def _resolve_asset_path(filename: str, required: bool = False) -> str | None:
+    """优先读取增强模型目录，不存在时自动回退到旧模型目录。"""
+    for model_dir in MODEL_DIR_CANDIDATES:
+        candidate = os.path.join(model_dir, filename)
+        if os.path.exists(candidate):
+            return candidate
+
+    if required:
+        searched = ", ".join(os.path.join(model_dir, filename) for model_dir in MODEL_DIR_CANDIDATES)
+        raise FileNotFoundError(f"未找到模型文件: {filename}（已检查: {searched}）")
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_dataset_feature_catalog() -> dict:
+    """从最新版增强数据集中提取前端表单选项，避免长期硬编码。"""
+    if not os.path.exists(DATASET_PATH):
+        return {}
+
+    df = pd.read_csv(DATASET_PATH, low_memory=False)
+    catalog = {}
+    for column in ["country", "family", "color", "head_feature", "habitat"]:
+        if column not in df.columns:
+            continue
+        values = (
+            pd.Series(df[column])
+            .dropna()
+            .astype(str)
+            .map(str.strip)
+        )
+        values = values[values != ""]
+        catalog[column] = sorted(values.unique().tolist())
+    return catalog
 
 
 def _load_preprocessing_assets():
@@ -47,13 +92,10 @@ def _load_preprocessing_assets():
     预测接口和验证集样本接口都依赖这些产物。如果用户还没有重新训练，
     这里会返回明确错误，避免继续使用旧的Unknown两阶段模型。
     """
-    if not os.path.exists(PREPROCESSOR_PATH):
-        raise FileNotFoundError(
-            "预处理器未找到，请先使用 .venv\\Scripts\\python.exe backend\\train.py 重新训练"
-        )
-
-    preprocessor = joblib.load(PREPROCESSOR_PATH)
-    selector = joblib.load(LASSO_SELECTOR_PATH) if os.path.exists(LASSO_SELECTOR_PATH) else None
+    preprocessor_path = _resolve_asset_path("preprocessor.pkl", required=True)
+    selector_path = _resolve_asset_path("lasso_selector.pkl", required=False)
+    preprocessor = joblib.load(preprocessor_path)
+    selector = joblib.load(selector_path) if selector_path else None
     return preprocessor, selector
 
 
@@ -62,8 +104,8 @@ def _load_models():
     models = {}
     missing = []
     for model_name, filename in MODEL_FILES.items():
-        model_path = os.path.join(MODELS_DIR, filename)
-        if os.path.exists(model_path):
+        model_path = _resolve_asset_path(filename, required=False)
+        if model_path:
             models[model_name] = joblib.load(model_path)
         else:
             missing.append(filename)
@@ -76,19 +118,30 @@ def _load_hierarchical_model():
     页面主预测现在依赖层级模型。如果用户尚未重新训练，直接返回清晰错误，
     避免悄悄退回旧四模型结果造成展示口径混乱。
     """
-    if not os.path.exists(HIERARCHICAL_MODEL_PATH):
-        raise FileNotFoundError("层级模型未找到，请先重新训练生成 hierarchical_model_bundle.pkl")
-    return joblib.load(HIERARCHICAL_MODEL_PATH)
+    hierarchical_model_path = _resolve_asset_path(
+        "hierarchical_model_bundle.pkl", required=True
+    )
+    return joblib.load(hierarchical_model_path)
 
 
 def _prepare_features(data, preprocessor, selector):
     """把原始特征转换成模型输入特征矩阵。"""
-    input_df = pd.DataFrame([data])
-    missing_columns = [col for col in REQUIRED_COLUMNS if col not in input_df.columns]
+    feature_columns = getattr(preprocessor, "feature_columns", None)
+    if not feature_columns:
+        known_features = set(getattr(preprocessor, "numeric_features", [])) | set(
+            getattr(preprocessor, "categorical_features", [])
+        )
+        feature_columns = [
+            column for column in ALL_AUGMENTED_MODEL_FEATURES if column in known_features
+        ]
+        if not feature_columns:
+            feature_columns = LEGACY_REQUIRED_COLUMNS.copy()
+
+    input_df = build_feature_frame_from_payload(data, feature_columns)
+    missing_columns = [col for col in LEGACY_REQUIRED_COLUMNS if col not in pd.DataFrame([data]).columns]
     if missing_columns:
         raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
 
-    input_df = input_df[REQUIRED_COLUMNS]
     # 训练流程现在使用完整7个输入特征；LASSO选择器只作为分析报告保留。
     # 因此预测接口不再用selector过滤特征，避免线上输入维度和新模型不一致。
     return preprocessor.transform(input_df)
@@ -100,8 +153,11 @@ def _prepare_hierarchical_features(data, model_bundle):
     物种子模型仍然只使用 family 之外的 6 个特征。family 由用户先选择，
     用来决定进入哪个 species 子模型，不作为特征列参与模型计算。
     """
-    input_df = pd.DataFrame([data])
-    missing_columns = [col for col in HIERARCHICAL_INPUT_COLUMNS if col not in input_df.columns]
+    feature_columns = model_bundle.get("feature_columns", LEGACY_HIERARCHICAL_INPUT_COLUMNS)
+    input_df = build_feature_frame_from_payload(data, feature_columns)
+    missing_columns = [
+        col for col in LEGACY_HIERARCHICAL_INPUT_COLUMNS if col not in pd.DataFrame([data]).columns
+    ]
     if missing_columns:
         raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
     return model_bundle["preprocessor"].transform(input_df)
@@ -222,7 +278,8 @@ def predict():
 @predict_bp.route("/validation-samples", methods=["GET"])
 def get_validation_samples():
     try:
-        if not os.path.exists(VALIDATION_SAMPLES_PATH):
+        validation_samples_path = _resolve_asset_path("validation_samples.json", required=False)
+        if not validation_samples_path:
             return jsonify(
                 {
                     "success": False,
@@ -235,7 +292,7 @@ def get_validation_samples():
         keyword = request.args.get("keyword", "").strip().lower()
         species = request.args.get("species", "").strip()
 
-        with open(VALIDATION_SAMPLES_PATH, "r", encoding="utf-8") as f:
+        with open(validation_samples_path, "r", encoding="utf-8") as f:
             samples = json.load(f)
 
         species_options = sorted({item.get("species") for item in samples if item.get("species")})
@@ -261,7 +318,7 @@ def get_validation_samples():
                 {
                     "id": index,
                     "species": item.get("species"),
-                    "features": {col: item.get(col) for col in REQUIRED_COLUMNS},
+                    "features": {col: item.get(col) for col in VALIDATION_RESPONSE_COLUMNS},
                 }
             )
 
@@ -282,6 +339,7 @@ def get_validation_samples():
 
 @predict_bp.route("/features", methods=["GET"])
 def get_features():
+    catalog = _load_dataset_feature_catalog()
     features = {
         "features": [
             {
@@ -300,24 +358,13 @@ def get_features():
                 "name": "country",
                 "type": "categorical",
                 "description": "国家代码",
-                "options": ["US", "NZ", "CA", "DE", "NL", "ES", "FR"],
+                "options": catalog.get("country", ["US", "NZ", "CA", "DE", "NL", "ES", "FR"]),
             },
             {
                 "name": "family",
                 "type": "categorical",
                 "description": "石蝇科",
-                "options": [
-                    "Perlidae",
-                    "Austroperlidae",
-                    "Pteronarcyidae",
-                    "Capniidae",
-                    "Leuctridae",
-                    "Taeniopterygidae",
-                    "Nemouridae",
-                    "Eustheniidae",
-                    "Gripopterygidae",
-                    "Perlodidae",
-                ],
+                "options": catalog.get("family", []),
             },
             {
                 "name": "body_length_mm",
@@ -329,13 +376,43 @@ def get_features():
                 "name": "color",
                 "type": "categorical",
                 "description": "颜色",
-                "options": ["brown", "dark", "yellow", "black"],
+                "options": catalog.get("color", ["brown", "dark", "yellow", "black", "unknown"]),
             },
             {
                 "name": "head_feature",
                 "type": "categorical",
                 "description": "头部特征",
-                "options": ["small antenna", "rounded", "large eye"],
+                "options": catalog.get(
+                    "head_feature",
+                    ["small antenna", "rounded", "large eye", "unknown"],
+                ),
+            },
+            {
+                "name": "month",
+                "type": "categorical",
+                "description": "观测月份",
+                "options": [str(month) for month in range(1, 13)] + ["unknown"],
+            },
+            {
+                "name": "habitat",
+                "type": "categorical",
+                "description": "栖息地",
+                "options": catalog.get(
+                    "habitat",
+                    ["stream", "river", "spring", "lake", "waterfall", "unknown"],
+                ),
+            },
+            {
+                "name": "sex",
+                "type": "categorical",
+                "description": "性别",
+                "options": ["male", "female", "unknown"],
+            },
+            {
+                "name": "life_stage",
+                "type": "categorical",
+                "description": "生命阶段",
+                "options": ["adult", "immature", "egg", "unknown"],
             },
         ],
         "target": "species",

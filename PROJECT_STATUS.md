@@ -28,21 +28,22 @@ backend/
   │   └── hierarchical_training.py  层级模型（Family→Species）
   ├── train.py                  原始训练入口
   ├── train_data2_enhanced.py   data2 增强训练脚本（8 特征）
-  └── train_augmented.py        增强数据集训练脚本（11 特征）★ 新增
+  └── train_augmented.py        增强数据集训练脚本（16 特征 + 可选层级模型）★ 新增
 
 data/
   ├── final_stonefly_dataset.csv          原始数据（8.8 MB，99,901 条）
   ├── stonefly_combined_data_data2.csv    合并数据（10.4 MB，67,493 条）
-  └── stonefly_combined_data_augmented.csv  增强数据（44 MB，278,259 条）★ 新增
+  └── stonefly_combined_data_augmented.csv  增强数据（45.6 MB，278,259 条，19 列）★ 新增
 
 scripts/
   ├── slurm_train_augmented.sbatch        正式训练 SLURM 脚本 ★ 新增
   └── slurm_train_augmented_smoke.sbatch  冒烟测试 SLURM 脚本 ★ 新增
 ```
 
-**预测流程（当前生产）**：
+**预测流程（当前生产 / 代码已支持增强版自动切换）**：
 ```
-用户选择科（Family）→ 后端用 family 过滤 → 层级 XGBoost 在科内预测物种 → 返回 Top-4 候选
+用户选择科（Family）→ 后端优先加载 `saved_models_augmented/` 下的层级模型
+（若不存在则回退 `saved_models/`）→ 在科内预测物种 → 返回 Top-4 候选
 ```
 
 ---
@@ -60,7 +61,29 @@ scripts/
 | `synthetic` | 210,766 | 合成补充数据（v2 脚本生成）|
 | **合计** | **278,259** | 696 个物种，全部 ≥ 300 条 |
 
-**特征字段（11 个）**：
+**原始字段（19 列）**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| species | 标签 | 物种名称 |
+| lat / lon | 数值 | 原始经纬度 |
+| country | 分类 | 国家代码 |
+| family | 分类 | 科标签 |
+| body_length_mm | 数值 | 体长 |
+| color | 分类 | 颜色 |
+| head_feature | 分类 | 头部特征 |
+| month | 分类 | 月份（`1-12` / `unknown`） |
+| season | 分类 | 由 month 衍生的季节（`spring/summer/fall/winter/unknown`） |
+| habitat | 分类 | 细粒度栖息地 |
+| habitat_group | 分类 | 对 habitat 的粗粒度归并 |
+| sex | 分类 | 性别 |
+| life_stage | 分类 | 生命周期阶段 |
+| lat_bin / lon_bin | 数值 | 由经纬度按整数网格离散化后的空间 bin |
+| geo_cell | 分类 | `lat_bin_lon_bin` 形式的空间网格标识 |
+| source_dataset | 分类 | 样本来源（`data/data2/synthetic`） |
+| gbifID | 标识 | data2 的原始观测 ID |
+
+**当前增强训练实际使用的模型特征（16 个）**：
 
 | 字段 | 类型 | 来源覆盖情况 |
 |------|------|------------|
@@ -71,9 +94,15 @@ scripts/
 | color | 分类 | data + synthetic（data2 为 unknown） |
 | head_feature | 分类 | data + synthetic（data2 为 unknown） |
 | month | 分类 | synthetic（按科级生态历填充）；data/data2 为 unknown |
+| season | 分类 | 由 month 派生；未知月份时为 unknown |
 | habitat | 分类 | synthetic（stream/river/spring/lake）；其余 unknown |
+| habitat_group | 分类 | 由 habitat 归并得到的粗粒度栖息地 |
 | sex | 分类 | synthetic（male/female 按比例）；其余 unknown |
 | life_stage | 分类 | synthetic（adult/immature/egg）；其余 unknown |
+| lat_bin / lon_bin | 数值 | 由 lat/lon 自动离散化得到 |
+| geo_cell | 分类 | 由 lat_bin/lon_bin 自动拼接得到 |
+
+> `source_dataset` 与 `gbifID` 保留在原始 CSV 中，用于追踪来源，不进入模型训练。
 
 **物种分布**：
 
@@ -141,6 +170,13 @@ scripts/
 
 脚本：`backend/train_augmented.py`，目标输出：`backend/saved_models_augmented/`
 
+**当前脚本能力**：
+
+- 读取并标准化最新版 19 列增强数据集
+- 训练 4 个平铺模型（XGBoost / RF / KNN / SVM）
+- 导出 `preprocessor.pkl`、`validation_samples.json`、评估报告
+- 默认继续训练增强版层级模型 `hierarchical_model_bundle.pkl`，供预测接口直接使用
+
 **配置参数**：
 
 | 模型 | 训练样本 | 关键超参 | 预期 Top-1 |
@@ -176,7 +212,7 @@ scripts/
 
 **增强数据集能否显著提升？**
 
-增强数据将训练样本从 ~4.5 万提升至 ~19.5 万，且加入了 month/habitat/sex/life_stage 特征，预期有一定提升，但平铺 696 类下 90% Top-1 可能性极低。
+增强数据将训练样本从 ~4.5 万提升至 ~19.5 万，且加入了 `month/season/habitat/habitat_group/sex/life_stage/lat_bin/lon_bin/geo_cell` 等辅助特征，预期有一定提升，但平铺 696 类下 90% Top-1 可能性极低。
 
 **达到 90% 的可行路径**：
 
@@ -194,9 +230,9 @@ scripts/
 |--------|------|------|
 | 🔴 高 | 等待集群 OOM 修复后的训练结果 | 进行中 |
 | 🔴 高 | 评估增强数据集 4 模型的实际精度 | 待训练完成 |
-| 🟡 中 | 用增强数据集重训层级模型（用户手选科 → 科内分类） | 待做 |
+| 🟡 中 | 用增强数据集重训层级模型（用户手选科 → 科内分类） | 脚本已支持，待训练完成 |
 | 🟡 中 | 前端 PredictView 支持 month/habitat/sex 可选输入字段 | 待做 |
-| 🟡 中 | predict.py API 切换到 saved_models_augmented/ 新模型 | 待训练完成后 |
+| 🟡 中 | predict.py API 切换到 saved_models_augmented/ 新模型 | 代码已支持自动优先加载，待增强模型产物生成 |
 | 🟢 低 | 评估缩减物种数（Top-N）对精度的影响 | 可选 |
 | 🟢 低 | 整理实验对比报告（原始 vs 增强数据集） | 可选 |
 
@@ -207,12 +243,14 @@ scripts/
 | 文件 | 用途 |
 |------|------|
 | `data/stonefly_combined_data_augmented.csv` | 主力训练数据（278k 条，696 物种）|
-| `backend/train_augmented.py` | 增强数据集训练脚本（11 特征，4 模型）|
+| `backend/train_augmented.py` | 增强数据集训练脚本（16 特征，4 模型 + 可选层级模型）|
+| `backend/ml/augmented_feature_utils.py` | 增强数据派生特征共享逻辑（season / habitat_group / geo_cell 等）|
 | `scripts/slurm_train_augmented.sbatch` | 正式训练 SLURM 脚本（32 CPU，80G，12h）|
 | `scripts/slurm_train_augmented_smoke.sbatch` | 冒烟测试脚本（8 CPU，1h）|
 | `scripts/generate_synthetic_data_v2.py` | 合成数据生成脚本（v2，含生态历）|
-| `backend/saved_models/hierarchical_model_bundle.pkl` | 当前线上层级模型 |
-| `backend/app/routes/predict.py` | 预测 API 入口 |
+| `backend/saved_models/hierarchical_model_bundle.pkl` | 当前线上旧层级模型 |
+| `backend/saved_models_augmented/hierarchical_model_bundle.pkl` | 增强版层级模型输出目标 |
+| `backend/app/routes/predict.py` | 预测 API 入口（优先读取增强版模型目录） |
 
 ---
 
