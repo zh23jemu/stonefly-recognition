@@ -1,9 +1,9 @@
 {
-  "backend_pid": 32956,
-  "frontend_pid": 60032,
+  "backend_pid": 36444,
+  "frontend_pid": 31032,
   "backend_port": 5000,
   "frontend_port": 4173,
-  "started_at": "2026-05-07 13:38:29",
+  "started_at": "2026-05-07 14:12:00",
   "backend_stdout_log": "C:\\Coding\\stonefly-recognition\\logs\\prod\\backend.stdout.log",
   "backend_stderr_log": "C:\\Coding\\stonefly-recognition\\logs\\prod\\backend.stderr.log",
   "frontend_stdout_log": "C:\\Coding\\stonefly-recognition\\logs\\prod\\frontend.stdout.log",

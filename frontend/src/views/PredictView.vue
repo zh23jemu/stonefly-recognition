@@ -14,7 +14,7 @@
             <el-input
               v-model="keyword"
               clearable
-              placeholder="搜索物种、国家或科"
+              placeholder="搜索国家、科、颜色或头部特征"
               @keyup.enter="loadSamples(1)"
               @clear="loadSamples(1)"
             />
@@ -22,7 +22,7 @@
               v-model="speciesFilter"
               clearable
               filterable
-              placeholder="按真实物种筛选"
+              placeholder="按科筛选样本"
               @change="loadSamples(1)"
             >
               <el-option
@@ -46,12 +46,17 @@
             class="sample-table"
             @row-click="selectSample"
           >
-            <el-table-column prop="species" label="真实物种" min-width="180" show-overflow-tooltip />
             <el-table-column label="国家" width="80">
               <template #default="{ row }">{{ row.features.country }}</template>
             </el-table-column>
             <el-table-column label="科" min-width="130" show-overflow-tooltip>
               <template #default="{ row }">{{ row.features.family }}</template>
+            </el-table-column>
+            <el-table-column label="颜色" min-width="120" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.features.color }}</template>
+            </el-table-column>
+            <el-table-column label="头部特征" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.features.head_feature }}</template>
             </el-table-column>
             <el-table-column label="体长" width="90">
               <template #default="{ row }">
@@ -85,10 +90,6 @@
 
           <template v-if="selectedSample">
             <div class="sample-summary">
-              <div>
-                <span class="summary-label">真实物种</span>
-                <strong>{{ selectedSample.species }}</strong>
-              </div>
               <div>
                 <span class="summary-label">真实科</span>
                 <strong>{{ selectedSample.features.family }}</strong>
@@ -140,9 +141,6 @@
                 <div class="result-status">
                   <el-tag :type="predictionResult.family_correct ? 'success' : 'danger'">
                     科{{ predictionResult.family_correct ? '正确' : '错误' }}
-                  </el-tag>
-                  <el-tag v-if="predictionResult.actual_family" effect="plain">
-                    真实科：{{ predictionResult.actual_family }}
                   </el-tag>
                 </div>
               </div>
