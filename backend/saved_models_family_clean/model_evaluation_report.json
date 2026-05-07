@@ -1,0 +1,122 @@
+{
+  "meta": {
+    "data_path": "../data/stonefly_combined_data_family_clean.csv",
+    "target": "family",
+    "n_classes": 16,
+    "train_samples": 117625,
+    "test_samples": 25206,
+    "val_samples": 25206,
+    "features": [
+      "lat",
+      "lon",
+      "country",
+      "body_length_mm",
+      "color",
+      "head_feature",
+      "month",
+      "habitat",
+      "sex",
+      "life_stage",
+      "season",
+      "habitat_group",
+      "lat_bin",
+      "lon_bin",
+      "geo_cell"
+    ],
+    "raw_feature_columns": [
+      "lat",
+      "lon",
+      "country",
+      "body_length_mm",
+      "color",
+      "head_feature",
+      "month",
+      "habitat",
+      "sex",
+      "life_stage",
+      "season",
+      "habitat_group",
+      "lat_bin",
+      "lon_bin",
+      "geo_cell"
+    ],
+    "n_features": 15,
+    "min_count_filter": 10,
+    "seed": 42,
+    "timestamp": "2026-05-07T01:38:10.807184"
+  },
+  "training_log": {
+    "xgboost": {
+      "training_time_sec": 14.3,
+      "n_train": 117625,
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 10,
+        "learning_rate": 0.05
+      }
+    },
+    "random_forest": {
+      "training_time_sec": 12.9,
+      "n_train": 80000,
+      "params": {
+        "n_estimators": 600,
+        "max_depth": 30,
+        "n_jobs": 8
+      }
+    },
+    "knn": {
+      "training_time_sec": 0.1,
+      "n_train": 50000
+    },
+    "svm": {
+      "training_time_sec": 262.0,
+      "n_train": 30000,
+      "params": {
+        "C": 10,
+        "kernel": "rbf"
+      }
+    }
+  },
+  "evaluation_results": {
+    "xgboost": {
+      "top1_accuracy": 0.8946,
+      "balanced_accuracy": 0.9099,
+      "f1_weighted": 0.8951,
+      "f1_macro": 0.8988,
+      "top3_accuracy": 0.9987,
+      "top4_accuracy": 0.9996,
+      "top5_accuracy": 0.9999,
+      "eval_time_sec": 0.5
+    },
+    "random_forest": {
+      "top1_accuracy": 0.8921,
+      "balanced_accuracy": 0.8796,
+      "f1_weighted": 0.8909,
+      "f1_macro": 0.8941,
+      "top3_accuracy": 0.9964,
+      "top4_accuracy": 0.9984,
+      "top5_accuracy": 0.9993,
+      "eval_time_sec": 1.9
+    },
+    "knn": {
+      "top1_accuracy": 0.679,
+      "balanced_accuracy": 0.6658,
+      "f1_weighted": 0.6762,
+      "f1_macro": 0.6858,
+      "top3_accuracy": 0.8623,
+      "top4_accuracy": 0.8863,
+      "top5_accuracy": 0.8969,
+      "eval_time_sec": 1.2
+    },
+    "svm": {
+      "top1_accuracy": 0.0443,
+      "balanced_accuracy": 0.3195,
+      "f1_weighted": 0.0094,
+      "f1_macro": 0.0412,
+      "top3_accuracy": 0.7383,
+      "top4_accuracy": 0.8575,
+      "top5_accuracy": 0.9176,
+      "eval_time_sec": 74.7
+    }
+  }
+}
