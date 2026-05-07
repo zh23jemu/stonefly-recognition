@@ -37,22 +37,16 @@ export interface ModelPrediction {
 export interface PredictionResponse {
   success: boolean
   prediction_mode?: string
-  selected_family?: string
   predicted_family?: string
   family_confidence?: number
-  species_prediction?: string
-  species_confidence?: number
-  top_4_species_predictions?: Array<{
-    species: string
+  top_3_family_predictions?: Array<{
+    family: string
     probability: number
   }>
   actual_family?: string
-  actual_species?: string
   family_correct?: boolean
-  species_correct?: boolean
-  used_fallback?: boolean
-  fallback_reason?: string | null
-  model_predictions?: ModelPrediction[]
+  model_used?: string
+  missing_models?: string[]
   error?: string
 }
 

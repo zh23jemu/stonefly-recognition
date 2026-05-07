@@ -79,7 +79,7 @@
           <template #header>
             <div class="card-header">
               <el-icon><Check /></el-icon>
-              <span>按科细分预测</span>
+              <span>科级分类预测</span>
             </div>
           </template>
 
@@ -90,7 +90,7 @@
                 <strong>{{ selectedSample.species }}</strong>
               </div>
               <div>
-                <span class="summary-label">已选科</span>
+                <span class="summary-label">真实科</span>
                 <strong>{{ selectedSample.features.family }}</strong>
               </div>
               <el-tag effect="plain">验证集样本 #{{ selectedSample.id + 1 }}</el-tag>
@@ -116,53 +116,44 @@
               @click="submitPrediction"
             >
               <el-icon><DataAnalysis /></el-icon>
-              在已选科内预测物种
+              预测所属科
             </el-button>
 
-            <div v-if="predictionResult?.selected_family" class="hierarchical-result">
+            <div v-if="predictionResult?.predicted_family" class="hierarchical-result">
               <div class="result-grid">
                 <div class="result-block">
-                  <span class="summary-label">使用科</span>
-                  <strong>{{ predictionResult.selected_family }}</strong>
+                  <span class="summary-label">预测科</span>
+                  <strong>{{ predictionResult.predicted_family }}</strong>
                   <el-progress
-                    :percentage="100"
+                    :percentage="toPercent(predictionResult.family_confidence)"
                     :stroke-width="8"
                     status="success"
                   />
                 </div>
                 <div class="result-block">
-                  <span class="summary-label">预测物种</span>
-                  <strong>{{ predictionResult.species_prediction }}</strong>
-                  <el-progress
-                    :percentage="toPercent(predictionResult.species_confidence)"
-                    :stroke-width="8"
-                  />
+                  <span class="summary-label">使用模型</span>
+                  <strong>{{ (predictionResult.model_used || '-').toUpperCase() }}</strong>
+                  <el-tag type="info" effect="plain">
+                    Top-1 置信度 {{ toPercent(predictionResult.family_confidence) }}%
+                  </el-tag>
                 </div>
                 <div class="result-status">
-                  <el-tag type="success">
-                    已限定科
+                  <el-tag :type="predictionResult.family_correct ? 'success' : 'danger'">
+                    科{{ predictionResult.family_correct ? '正确' : '错误' }}
                   </el-tag>
-                  <el-tag :type="predictionResult.species_correct ? 'success' : 'danger'">
-                    物种{{ predictionResult.species_correct ? '正确' : '错误' }}
+                  <el-tag v-if="predictionResult.actual_family" effect="plain">
+                    真实科：{{ predictionResult.actual_family }}
                   </el-tag>
                 </div>
               </div>
 
-              <el-alert
-                v-if="predictionResult.used_fallback"
-                type="warning"
-                show-icon
-                :closable="false"
-                title="该科没有可用的物种子模型，已使用回退预测"
-              />
-
               <el-table
-                :data="predictionResult.top_4_species_predictions || []"
+                :data="predictionResult.top_3_family_predictions || []"
                 border
                 class="prediction-table"
               >
                 <el-table-column type="index" label="#" width="60" />
-                <el-table-column prop="species" label="Top-4候选物种" min-width="220" show-overflow-tooltip />
+                <el-table-column prop="family" label="Top-3候选科" min-width="220" show-overflow-tooltip />
                 <el-table-column label="概率" width="180">
                   <template #default="{ row }">
                     <el-progress :percentage="toPercent(row.probability)" />
@@ -170,8 +161,8 @@
                 </el-table-column>
                 <el-table-column label="命中" width="90">
                   <template #default="{ row }">
-                    <el-tag :type="row.species === selectedSample?.species ? 'success' : 'info'">
-                      {{ row.species === selectedSample?.species ? '是' : '否' }}
+                    <el-tag :type="row.family === selectedSample?.features.family ? 'success' : 'info'">
+                      {{ row.family === selectedSample?.features.family ? '是' : '否' }}
                     </el-tag>
                   </template>
                 </el-table-column>
@@ -253,7 +244,7 @@ const submitPrediction = async () => {
     })
     if (result.success) {
       predictionResult.value = result
-      ElMessage.success('已在所选科内完成物种预测')
+      ElMessage.success('科级分类预测完成')
     } else {
       ElMessage.error(result.error || '预测失败')
     }

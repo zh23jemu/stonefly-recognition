@@ -36,11 +36,12 @@ def test_features_endpoint(client):
     data = json.loads(rv.data)
     assert "features" in data
     assert "target" in data
-    assert len(data["features"]) == 7
+    assert data["target"] == "family"
+    assert len(data["features"]) >= 10
 
 
 def test_predict_with_model(client):
-    """测试训练后的预测"""
+    """测试训练后的科级预测"""
     rv = client.post(
         "/api/predict",
         data=json.dumps(
@@ -59,8 +60,9 @@ def test_predict_with_model(client):
     assert rv.status_code == 200
     data = json.loads(rv.data)
     assert data["success"] == True
-    assert "prediction" in data
-    assert "confidence" in data
+    assert "predicted_family" in data
+    assert "family_confidence" in data
+    assert "top_3_family_predictions" in data
 
 
 def test_predict_missing_fields(client):

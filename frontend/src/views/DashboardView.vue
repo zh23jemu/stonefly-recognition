@@ -33,7 +33,7 @@
               <el-col :span="6">
                 <el-card class="stat-card">
                   <h3>模型数量</h3>
-                  <p class="stat-value">4</p>
+                  <p class="stat-value">{{ modelComparisonData.length }}</p>
                 </el-card>
               </el-col>
             </el-row>
@@ -59,7 +59,7 @@
               </el-col>
               <el-col :span="6">
                 <el-card class="stat-card">
-                  <h3>已知物种数</h3>
+                  <h3>已知科数</h3>
                   <p class="stat-value">{{ datasetSummary.class_count }}</p>
                 </el-card>
               </el-col>
@@ -76,7 +76,7 @@
                 <el-card class="stat-card">
                   <h3>指标说明</h3>
                   <p class="stat-desc">
-                    当前训练流程已过滤 Unknown Stonefly，并使用完整7个输入特征训练模型；准确率为严格Top-1预测命中率。
+                    当前展示的是 family_clean 科级分类模型，已过滤 unknown month 和 habitat，Top-1 表示科级命中率。
                   </p>
                 </el-card>
               </el-col>

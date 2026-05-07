@@ -49,7 +49,7 @@
         <el-card class="feature-card">
           <el-icon class="feature-icon"><Cpu /></el-icon>
           <h3>多模型对比</h3>
-          <p>集成随机森林、SVM、XGBoost等多种算法</p>
+          <p>集成随机森林、KNN、XGBoost三种科级分类模型</p>
         </el-card>
       </el-col>
     </el-row>

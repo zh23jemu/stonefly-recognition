@@ -19,10 +19,20 @@ from ml.augmented_feature_utils import (  # noqa: E402
     build_feature_frame_from_payload,
 )
 
+FAMILY_CLEAN_MODELS_DIR = os.path.join(BASE_DIR, "saved_models_family_clean")
+FAMILY_MODELS_DIR = os.path.join(BASE_DIR, "saved_models_family")
 AUGMENTED_MODELS_DIR = os.path.join(BASE_DIR, "saved_models_augmented")
 LEGACY_MODELS_DIR = os.path.join(BASE_DIR, "saved_models")
-MODEL_DIR_CANDIDATES = [AUGMENTED_MODELS_DIR, LEGACY_MODELS_DIR]
-DATASET_PATH = os.path.join(BASE_DIR, "..", "data", "stonefly_combined_data_augmented.csv")
+MODEL_DIR_CANDIDATES = [
+    FAMILY_CLEAN_MODELS_DIR,
+    FAMILY_MODELS_DIR,
+    AUGMENTED_MODELS_DIR,
+    LEGACY_MODELS_DIR,
+]
+DATASET_PATH_CANDIDATES = [
+    os.path.join(BASE_DIR, "..", "data", "stonefly_combined_data_family_clean.csv"),
+    os.path.join(BASE_DIR, "..", "data", "stonefly_combined_data_augmented.csv"),
+]
 
 MODEL_FILES = {
     "knn": "knn_model.pkl",
@@ -51,6 +61,14 @@ LEGACY_HIERARCHICAL_INPUT_COLUMNS = [
 VALIDATION_RESPONSE_COLUMNS = BASE_AUGMENTED_FEATURES.copy()
 
 
+def _resolve_dataset_path() -> str | None:
+    """优先读取 family_clean 数据集，用于前端表单选项和说明信息。"""
+    for candidate in DATASET_PATH_CANDIDATES:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def _resolve_asset_path(filename: str, required: bool = False) -> str | None:
     """优先读取增强模型目录，不存在时自动回退到旧模型目录。"""
     for model_dir in MODEL_DIR_CANDIDATES:
@@ -67,10 +85,11 @@ def _resolve_asset_path(filename: str, required: bool = False) -> str | None:
 @lru_cache(maxsize=1)
 def _load_dataset_feature_catalog() -> dict:
     """从最新版增强数据集中提取前端表单选项，避免长期硬编码。"""
-    if not os.path.exists(DATASET_PATH):
+    dataset_path = _resolve_dataset_path()
+    if not dataset_path:
         return {}
 
-    df = pd.read_csv(DATASET_PATH, low_memory=False)
+    df = pd.read_csv(dataset_path, low_memory=False)
     catalog = {}
     for column in ["country", "family", "color", "head_feature", "habitat"]:
         if column not in df.columns:
@@ -112,6 +131,31 @@ def _load_models():
     return models, missing
 
 
+def _load_best_model_name(default: str = "xgboost") -> str:
+    """从评估报告中选择当前最佳模型，默认优先使用 XGBoost。"""
+    report_path = _resolve_asset_path("model_evaluation_report.json", required=False)
+    if not report_path:
+        return default
+
+    with open(report_path, "r", encoding="utf-8") as f:
+        report = json.load(f)
+
+    evaluation_results = report.get("evaluation_results", {})
+    if not evaluation_results:
+        return default
+
+    ranked_models = sorted(
+        evaluation_results.items(),
+        key=lambda item: (
+            item[1].get("top1_accuracy", -1),
+            item[1].get("f1_macro", -1),
+            item[1].get("top3_accuracy", -1),
+        ),
+        reverse=True,
+    )
+    return ranked_models[0][0]
+
+
 def _load_hierarchical_model():
     """加载 family -> species 层级模型。
 
@@ -138,7 +182,8 @@ def _prepare_features(data, preprocessor, selector):
             feature_columns = LEGACY_REQUIRED_COLUMNS.copy()
 
     input_df = build_feature_frame_from_payload(data, feature_columns)
-    missing_columns = [col for col in LEGACY_REQUIRED_COLUMNS if col not in pd.DataFrame([data]).columns]
+    required_input_columns = [col for col in LEGACY_REQUIRED_COLUMNS if col != "family"]
+    missing_columns = [col for col in required_input_columns if col not in pd.DataFrame([data]).columns]
     if missing_columns:
         raise ValueError(f"缺少必要字段: {', '.join(missing_columns)}")
 
@@ -172,17 +217,17 @@ def _require_selected_family(data):
 
 
 def _label_from_encoded(preprocessor, encoded_label):
-    """将模型输出的数字标签转换回石蝇物种名称。"""
+    """将模型输出的数字标签转换回原始类别名称。"""
     return preprocessor.target_encoder.inverse_transform([int(encoded_label)])[0]
 
 
-def _top_predictions(model, X_processed, preprocessor, limit=3):
-    """生成单个模型的Top-N预测结果。"""
+def _top_predictions(model, X_processed, preprocessor, label_key: str, limit=3):
+    """生成单个模型的 Top-N 预测结果，并按指定字段名返回类别。"""
     if not hasattr(model, "predict_proba"):
         prediction = model.predict(X_processed)[0]
         return [
             {
-                "species": _label_from_encoded(preprocessor, prediction),
+                label_key: _label_from_encoded(preprocessor, prediction),
                 "probability": 1.0,
             }
         ]
@@ -192,7 +237,7 @@ def _top_predictions(model, X_processed, preprocessor, limit=3):
     order = np.argsort(probabilities)[::-1][:limit]
     return [
         {
-            "species": _label_from_encoded(preprocessor, class_labels[index]),
+            label_key: _label_from_encoded(preprocessor, class_labels[index]),
             "probability": float(probabilities[index]),
         }
         for index in order
@@ -256,14 +301,39 @@ def _predict_hierarchical(data, model_bundle, limit=4):
 def predict():
     try:
         data = request.get_json() or {}
-        model_bundle = _load_hierarchical_model()
-        hierarchical_prediction = _predict_hierarchical(data, model_bundle)
+        preprocessor, selector = _load_preprocessing_assets()
+        X_processed = _prepare_features(data, preprocessor, selector)
+        models, missing = _load_models()
+
+        if not models:
+            raise FileNotFoundError(
+                "当前模型目录中没有可用的科级分类模型，请先完成 family_clean 训练"
+            )
+
+        best_model_name = _load_best_model_name()
+        selected_model_name = best_model_name if best_model_name in models else next(iter(models))
+        selected_model = models[selected_model_name]
+        top_family_predictions = _top_predictions(
+            selected_model,
+            X_processed,
+            preprocessor,
+            label_key="family",
+            limit=3,
+        )
+        predicted_family = top_family_predictions[0]["family"]
+        actual_family = data.get("family") or data.get("actual_family")
 
         return jsonify(
             {
                 "success": True,
-                "prediction_mode": "known_family_species",
-                **hierarchical_prediction,
+                "prediction_mode": "family_classification",
+                "model_used": selected_model_name,
+                "predicted_family": predicted_family,
+                "family_confidence": top_family_predictions[0]["probability"],
+                "top_3_family_predictions": top_family_predictions,
+                "actual_family": actual_family,
+                "family_correct": predicted_family == actual_family if actual_family else None,
+                "missing_models": missing,
             }
         )
 
@@ -415,6 +485,6 @@ def get_features():
                 "options": ["adult", "immature", "egg", "unknown"],
             },
         ],
-        "target": "species",
+        "target": "family",
     }
     return jsonify(features)
