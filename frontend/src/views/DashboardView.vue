@@ -140,21 +140,21 @@
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-card class="chart-card">
-                  <template #header>模型对比图</template>
+                  <template #header>科级模型对比</template>
                   <img v-if="imageExists.model_comparison" 
-                       :src="'/api/visualization/model_comparison.png'" 
-                       alt="Model Comparison"
-                       class="chart-image" />
+                        :src="'/api/visualization/model_comparison.png'" 
+                        alt="Model Comparison"
+                        class="chart-image" />
                   <el-empty v-else description="图表加载中..." />
                 </el-card>
               </el-col>
               <el-col :span="12">
                 <el-card class="chart-card">
-                  <template #header>类别分布</template>
+                  <template #header>科级类别分布</template>
                   <img v-if="imageExists.class_distribution" 
-                       :src="'/api/visualization/class_distribution.png'" 
-                       alt="Class Distribution"
-                       class="chart-image" />
+                        :src="'/api/visualization/class_distribution.png'" 
+                        alt="Class Distribution"
+                        class="chart-image" />
                   <el-empty v-else description="图表加载中..." />
                 </el-card>
               </el-col>
@@ -163,11 +163,11 @@
             <el-row :gutter="20" class="chart-row">
               <el-col :span="12">
                 <el-card class="chart-card">
-                  <template #header>特征分布</template>
+                  <template #header>科级特征分布</template>
                   <img v-if="imageExists.feature_distributions" 
-                       :src="'/api/visualization/feature_distributions.png'" 
-                       alt="Feature Distributions"
-                       class="chart-image" />
+                        :src="'/api/visualization/feature_distributions.png'" 
+                        alt="Feature Distributions"
+                        class="chart-image" />
                   <el-empty v-else description="图表加载中..." />
                 </el-card>
               </el-col>

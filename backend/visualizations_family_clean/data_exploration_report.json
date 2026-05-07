@@ -1,0 +1,91 @@
+{
+  "basic_statistics": {
+    "total_samples": 168037,
+    "total_features": 19,
+    "feature_names": [
+      "species",
+      "lat",
+      "lon",
+      "country",
+      "family",
+      "body_length_mm",
+      "color",
+      "head_feature",
+      "month",
+      "season",
+      "habitat",
+      "habitat_group",
+      "sex",
+      "life_stage",
+      "lat_bin",
+      "lon_bin",
+      "geo_cell",
+      "source_dataset",
+      "gbifID"
+    ],
+    "numeric_features": [
+      "lat",
+      "lon",
+      "body_length_mm",
+      "month",
+      "lat_bin",
+      "lon_bin",
+      "gbifID"
+    ],
+    "categorical_features": [
+      "species",
+      "country",
+      "family",
+      "color",
+      "head_feature",
+      "season",
+      "habitat",
+      "habitat_group",
+      "sex",
+      "life_stage",
+      "geo_cell",
+      "source_dataset"
+    ]
+  },
+  "target_analysis": {
+    "target_column": "family",
+    "num_classes": 16,
+    "class_distribution": {
+      "Perlidae": 31711,
+      "Perlodidae": 25759,
+      "Nemouridae": 23011,
+      "Capniidae": 17306,
+      "Leuctridae": 16001,
+      "Chloroperlidae": 14048,
+      "Gripopterygidae": 13010,
+      "Taeniopterygidae": 9275,
+      "Notonemouridae": 7330,
+      "Eustheniidae": 3352,
+      "Peltoperlidae": 2148,
+      "Pteronarcyidae": 2100,
+      "Austroperlidae": 1046,
+      "Styloperlidae": 848,
+      "Kathroperlidae": 768,
+      "Scopuridae": 324
+    },
+    "class_percentages": {
+      "Perlidae": 18.8714,
+      "Perlodidae": 15.3294,
+      "Nemouridae": 13.694,
+      "Capniidae": 10.2989,
+      "Leuctridae": 9.5223,
+      "Chloroperlidae": 8.3601,
+      "Gripopterygidae": 7.7423,
+      "Taeniopterygidae": 5.5196,
+      "Notonemouridae": 4.3621,
+      "Eustheniidae": 1.9948,
+      "Peltoperlidae": 1.2783,
+      "Pteronarcyidae": 1.2497,
+      "Austroperlidae": 0.6225,
+      "Styloperlidae": 0.5047,
+      "Kathroperlidae": 0.457,
+      "Scopuridae": 0.1928
+    },
+    "imbalance_ratio": 97.87345679012346
+  }
+}

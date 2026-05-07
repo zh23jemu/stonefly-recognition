@@ -4,9 +4,12 @@ import json
 
 visualization_bp = Blueprint("visualization", __name__)
 
-VISUALIZATIONS_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "..", "visualizations"
-)
+VISUALIZATION_DIR_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "..", "..", "visualizations_family_clean"),
+    os.path.join(os.path.dirname(__file__), "..", "..", "visualizations_family"),
+    os.path.join(os.path.dirname(__file__), "..", "..", "visualizations_augmented"),
+    os.path.join(os.path.dirname(__file__), "..", "..", "visualizations"),
+]
 MODELS_DIR_CANDIDATES = [
     os.path.join(os.path.dirname(__file__), "..", "..", "saved_models_family_clean"),
     os.path.join(os.path.dirname(__file__), "..", "..", "saved_models_family"),
@@ -22,6 +25,14 @@ def _resolve_report_path() -> str | None:
         if os.path.exists(report_path):
             return report_path
     return None
+
+
+def _resolve_visualization_dir() -> str:
+    """优先读取当前 family_clean 版本的可视化目录。"""
+    for directory in VISUALIZATION_DIR_CANDIDATES:
+        if os.path.exists(directory):
+            return directory
+    return VISUALIZATION_DIR_CANDIDATES[-1]
 
 
 def _build_model_info_payload(report: dict) -> dict:
@@ -82,7 +93,7 @@ def get_model_info():
 @visualization_bp.route("/stats", methods=["GET"])
 def get_stats():
     try:
-        stats_path = os.path.join(VISUALIZATIONS_DIR, "data_exploration_report.json")
+        stats_path = os.path.join(_resolve_visualization_dir(), "data_exploration_report.json")
         if os.path.exists(stats_path):
             with open(stats_path, "r", encoding="utf-8") as f:
                 stats = json.load(f)
@@ -96,7 +107,7 @@ def get_stats():
 @visualization_bp.route("/visualization/<path:filename>", methods=["GET"])
 def get_visualization(filename):
     try:
-        file_path = os.path.join(VISUALIZATIONS_DIR, filename)
+        file_path = os.path.join(_resolve_visualization_dir(), filename)
         if os.path.exists(file_path):
             return send_file(file_path, mimetype="image/png")
         else:
